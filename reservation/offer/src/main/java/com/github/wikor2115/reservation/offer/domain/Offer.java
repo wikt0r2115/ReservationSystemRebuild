@@ -38,12 +38,26 @@ public class Offer {
     @Column(nullable = false)
     private boolean archived = false;
 
+    public static Offer create(String name, String imageUrl, String description, BigDecimal price){
+        Offer offer = new Offer();
+        offer.validateName(name);
+        offer.validateImageUrl(imageUrl);
+        offer.validateDescription(description);
+        offer.validatePrice(price);
+        offer.name = name;
+        offer.imageUrl = imageUrl;
+        offer.description = description;
+        offer.price = price;
+        return offer;    
+    }
+
+
     public Long getId(){return this.id;}
     public String getName(){return this.name;}
     public String getImageUrl(){return this.imageUrl;}
     public String getDescription(){return this.description;}
     public BigDecimal getPrice(){return this.price;}
-    public boolean getArchived(){return this.archived;}
+    public boolean isArchived(){return this.archived;}
 
     static private final BigDecimal MAX_PRICE = new BigDecimal("99999.99");
 
@@ -54,43 +68,73 @@ public class Offer {
     }
 
     public void changePrice(BigDecimal newPrice){
-
-        if(this.archived)
-            throw new IllegalStateException("Offer is archived");
-        if(newPrice == null)
-            throw new IllegalArgumentException("Price is null");
-        if(newPrice.compareTo(BigDecimal.ZERO) <= 0)
-            throw new IllegalArgumentException("Price must be greater than 0");
-        if(newPrice.compareTo(MAX_PRICE) > 0)
-            throw new IllegalArgumentException("Price must not exceed 99999.99");
+        this.validatePrice(newPrice);
         this.price = newPrice;
     }
+
     public void rename(String newName){
-        if(this.archived)
-            throw new IllegalStateException("Offer is archived");
-        if(newName == null)
-            throw new IllegalArgumentException("Name is null");
+        this.validateName(newName);
         newName = newName.trim();
-        if(newName.isEmpty())
-            throw new IllegalArgumentException("Name is blank");
-        if(newName.length() > 255)
-            throw new IllegalArgumentException("Name is too long");
-        if(this.name.equals(newName))
-            throw new IllegalArgumentException("Name is the same");
         this.name = newName;
     }
+
     public void changeDescription(String newDescription){
+        this.validateDescription(newDescription);
+        newDescription = newDescription.trim();
+        this.description = newDescription;
+    }
+
+    public void changeImageUrl(String newImageUrl){
+        this.validateImageUrl(newImageUrl);
+        newImageUrl = newImageUrl.trim();
+        this.imageUrl = newImageUrl;
+    }
+
+    private void validateName(String name){
         if(this.archived)
             throw new IllegalStateException("Offer is archived");
-        if(newDescription == null)
+        if(name == null)
+            throw new IllegalArgumentException("Name is null");
+        name = name.trim();
+        if(name.isEmpty())
+            throw new IllegalArgumentException("Name is blank");
+        if(name.length() > 255)
+            throw new IllegalArgumentException("Name is too long");
+        if(this.name.equals(name))
+            throw new IllegalArgumentException("Name is the same");
+    }
+
+    private void validateImageUrl(String imageUrl){
+        if(this.archived)
+            throw new IllegalStateException("Offer is archived");
+        if(imageUrl == null)
+            throw new IllegalArgumentException("Image URL is null");
+        imageUrl = imageUrl.trim();
+        if(imageUrl.isEmpty())
+            throw new IllegalArgumentException("Image URL is blank");
+        if(imageUrl.length() > 2048)
+            throw new IllegalArgumentException("Image URL is too long");
+        //URL validation - need to add
+    }
+
+    private void validateDescription(String description){
+        if(description == null)
             throw new IllegalArgumentException("Description is null");
-        newDescription = newDescription.trim();
-        if(newDescription.isEmpty())
+        description = description.trim();
+        if(description.isEmpty())
             throw new IllegalArgumentException("Description is blank");
-        if(newDescription.length() > 2048)
+        if(description.length() > 2048)
             throw new IllegalArgumentException("Description is too long");
-        if(this.description.equals(newDescription))
-            throw new IllegalArgumentException("Description is the same");
-        this.description = newDescription;
+    }
+
+    private void validatePrice(BigDecimal price){
+        if(price == null)
+            throw new IllegalArgumentException("Price is null");
+        if(price.compareTo(BigDecimal.ZERO) <= 0)
+            throw new IllegalArgumentException("Price must be greater than 0");
+        if(price.compareTo(MAX_PRICE) > 0)
+            throw new IllegalArgumentException("Price must not exceed 99999.99");
+        if(price.scale() > 2)
+            throw new IllegalArgumentException("Price must have at most 2 decimal places");
     }
 }
