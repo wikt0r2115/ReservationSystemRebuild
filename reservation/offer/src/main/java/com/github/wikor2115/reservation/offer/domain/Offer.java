@@ -44,11 +44,11 @@ public class Offer {
         offer.validateImageUrl(imageUrl);
         offer.validateDescription(description);
         offer.validatePrice(price);
-        offer.name = name;
-        offer.imageUrl = imageUrl;
-        offer.description = description;
+        offer.name = name.trim();
+        offer.imageUrl = imageUrl.trim();
+        offer.description = description.trim();
         offer.price = price;
-        return offer;    
+        return offer;
     }
 
 
@@ -59,7 +59,7 @@ public class Offer {
     public BigDecimal getPrice(){return this.price;}
     public boolean isArchived(){return this.archived;}
 
-    static private final BigDecimal MAX_PRICE = new BigDecimal("99999.99");
+    private static final BigDecimal MAX_PRICE = new BigDecimal("99999.99");
 
     public void archive(){
         if(this.archived)
@@ -69,7 +69,7 @@ public class Offer {
 
     public void changePrice(BigDecimal newPrice){
         this.validatePrice(newPrice);
-        this.price = newPrice;
+        this.price = newPrice.setScale(2);
     }
 
     public void rename(String newName){
@@ -100,6 +100,8 @@ public class Offer {
             throw new IllegalArgumentException("Name is blank");
         if(name.length() > 255)
             throw new IllegalArgumentException("Name is too long");
+        if(this.name == null)
+            return;
         if(this.name.equals(name))
             throw new IllegalArgumentException("Name is the same");
     }
@@ -118,6 +120,8 @@ public class Offer {
     }
 
     private void validateDescription(String description){
+        if(this.archived)
+            throw new IllegalStateException("Offer is archived");
         if(description == null)
             throw new IllegalArgumentException("Description is null");
         description = description.trim();
@@ -128,6 +132,8 @@ public class Offer {
     }
 
     private void validatePrice(BigDecimal price){
+        if(this.archived)
+            throw new IllegalStateException("Offer is archived");
         if(price == null)
             throw new IllegalArgumentException("Price is null");
         if(price.compareTo(BigDecimal.ZERO) <= 0)
