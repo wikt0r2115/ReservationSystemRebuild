@@ -26,7 +26,39 @@ public class OfferService {
 
     @Transactional(readOnly = true)
     public List<Offer> findActiveOffers(){
-        return offerRepository.findByArchivedFalse();
+        return offerRepository.findByArchivedFalseOrderByNameAsc();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Offer> findAllOffers(){
+        return offerRepository.findAllByOrderByNameAsc();
+    }
+
+    @Transactional(readOnly = true)
+    public Offer findActiveOfferById(Long offerId) {
+        return offerRepository.findByIdAndArchivedFalse(offerId)
+                .orElseThrow(() -> new OfferNotFoundException(offerId));
+    }
+
+    @Transactional
+    public Offer updateOffer(Long offerId, String name, String imageUrl, String description, BigDecimal price) {
+        Offer offer = offerRepository.findById(offerId)
+                .orElseThrow(() -> new OfferNotFoundException(offerId));
+
+        if (name != null) {
+            offer.rename(name);
+        }
+        if (imageUrl != null) {
+            offer.changeImageUrl(imageUrl);
+        }
+        if (description != null) {
+            offer.changeDescription(description);
+        }
+        if (price != null) {
+            offer.changePrice(price);
+        }
+
+        return offerRepository.save(offer);
     }
     
     @Transactional
