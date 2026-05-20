@@ -4,5 +4,6 @@ import java.util.List;
 
 public record ApiErrorResponse(
         String code,
+        String message,
         List<ApiFieldError> details
 ) {}

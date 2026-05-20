@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: reservation/offer
+            artifact: offer
+          - module: reservation/availability
+            artifact: availability
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: |
+            reservation/offer/pom.xml
+            reservation/availability/pom.xml
+
+      - name: Run tests
+        run: ./mvnw -B clean test
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-${{ matrix.artifact }}
+          path: ${{ matrix.module }}/target/surefire-reports
+          if-no-files-found: ignore
+
+  package:
+    name: Package ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: reservation/offer
+            artifact: offer
+          - module: reservation/availability
+            artifact: availability
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: |
+            reservation/offer/pom.xml
+            reservation/availability/pom.xml
+
+      - name: Build package
+        run: ./mvnw -B -DskipTests package
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-jar
+          path: ${{ matrix.module }}/target/*.jar
+          if-no-files-found: error

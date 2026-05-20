@@ -122,6 +122,21 @@ class OfferServiceTest {
     }
 
     @Test
+    void updateOffer_whenOfferArchived_throwsIllegalStateException() {
+        Offer offer = sampleOffer();
+        offer.archive();
+        when(offerRepository.findById(10L)).thenReturn(Optional.of(offer));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> offerService.updateOffer(10L, "Updated Name", null, null, null)
+        );
+
+        assertEquals("Offer is archived", exception.getMessage());
+        verify(offerRepository, never()).save(any());
+    }
+
+    @Test
     void archiveOffer_existingOffer_archivesAndSaves() {
         Offer offer = sampleOffer();
         when(offerRepository.findById(10L)).thenReturn(Optional.of(offer));
@@ -139,6 +154,21 @@ class OfferServiceTest {
 
         assertThrows(OfferNotFoundException.class, () -> offerService.archiveOffer(404L));
 
+        verify(offerRepository, never()).save(any());
+    }
+
+    @Test
+    void archiveOffer_whenAlreadyArchived_throwsIllegalStateException() {
+        Offer offer = sampleOffer();
+        offer.archive();
+        when(offerRepository.findById(10L)).thenReturn(Optional.of(offer));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> offerService.archiveOffer(10L)
+        );
+
+        assertEquals("Offer is archived", exception.getMessage());
         verify(offerRepository, never()).save(any());
     }
 

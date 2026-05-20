@@ -1,0 +1,17 @@
+PROJECT_MEMORY.md
+target/
+**/target/
+
+.agents/
+.codex/
+
+.vscode/
+.idea/
+*.iml
+
+.env
+.env.*
+!.env.example
+
+logs/
+*.log
