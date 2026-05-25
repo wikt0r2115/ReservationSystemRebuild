@@ -14,5 +14,6 @@
     <modules>
         <module>offer</module>
         <module>availability</module>
+        <module>booking</module>
     </modules>
 </project>
