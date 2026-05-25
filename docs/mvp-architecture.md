@@ -13,9 +13,9 @@ reservation/availability
 reservation/booking
 ```
 
-Each module has its own Spring Boot application, local H2 configuration and
-tests. The Maven aggregator in `reservation/pom.xml` builds and tests all
-modules together.
+Each module has its own Spring Boot application, local H2 configuration,
+PostgreSQL/Flyway profile and tests. The Maven aggregator in
+`reservation/pom.xml` builds and tests all modules together.
 
 ## Booking And Availability Boundary
 
@@ -49,17 +49,16 @@ For a future microservice split:
 
 ## Current Known Gaps
 
-- No authentication or role enforcement.
-- Admin paths are naming convention only.
-- H2 is used for local/dev/test.
-- No Flyway/Liquibase migrations yet.
-- No Docker Compose or PostgreSQL profile yet.
+- Authentication is intentionally simple HTTP Basic with in-memory users.
+- Admin/customer split exists, but there is no real identity provider yet.
+- H2 is still used for fast local/test runs.
+- PostgreSQL/Flyway exists for local development, but not yet in CI.
 - OpenAPI is enabled only in dev profiles and not yet curated with descriptions.
 
 ## Recommended Next Hardening Order
 
-1. Add Flyway migrations.
-2. Add PostgreSQL and Docker Compose for local development.
-3. Add Spring Security with simple admin/customer split.
-4. Add OpenAPI descriptions and example requests.
+1. Run and verify the full PostgreSQL smoke flow outside the Codex sandbox.
+2. Add OpenAPI descriptions and example requests.
+3. Add CI service containers or Testcontainers for PostgreSQL verification.
+4. Replace in-memory HTTP Basic users with a real auth boundary if needed.
 5. Decide whether to keep modular MVP style or split into real services.

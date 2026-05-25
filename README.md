@@ -3,9 +3,9 @@
 Spring Boot backend for a reservation system. The current MVP contains three
 tested modules: offers, availability slots and reservations.
 
-The project is intentionally still a portfolio MVP. It uses H2 for local/dev
-runs, has no authentication yet, and keeps production hardening items such as
-PostgreSQL, migrations and Docker Compose as explicit next steps.
+The project is intentionally still a portfolio MVP. It keeps H2 for fast
+local/test runs, and also has a PostgreSQL/Flyway/Docker Compose development
+path plus simple HTTP Basic authentication for customer/admin flows.
 
 ## Current Status
 
@@ -16,6 +16,9 @@ PostgreSQL, migrations and Docker Compose as explicit next steps.
 - Spring Data JPA
 - Bean Validation
 - H2 for current local/dev/test setup
+- PostgreSQL dev profile with Flyway migrations
+- Docker Compose for local PostgreSQL
+- Spring Security HTTP Basic for customer/admin separation
 - OpenAPI UI through Springdoc in the `dev` profile
 
 Current Maven modules:
@@ -68,7 +71,7 @@ mvn clean package
 
 ## Run Locally
 
-Run one module as an executable Spring Boot jar:
+Run one module with the default H2 profile as an executable Spring Boot jar:
 
 ```bash
 cd reservation
@@ -100,10 +103,51 @@ H2 console is enabled in the `dev` profile:
 http://localhost:<port>/h2-console
 ```
 
+## Run With PostgreSQL
+
+Start local PostgreSQL:
+
+```bash
+cd reservation
+docker compose up -d postgres
+```
+
+Build the modules:
+
+```bash
+mvn -DskipTests package
+```
+
+Run a module with Flyway migrations and PostgreSQL:
+
+```bash
+java -jar booking/target/booking-0.0.1-SNAPSHOT-exec.jar --spring.profiles.active=dev-postgres
+```
+
+The default local PostgreSQL settings are:
+
+```text
+url:      jdbc:postgresql://localhost:5432/reservation
+username: reservation
+password: reservation
+```
+
+They can be overridden with `DATABASE_URL`, `DATABASE_USERNAME` and
+`DATABASE_PASSWORD`.
+
+Default local API users:
+
+```text
+admin:    admin / admin123
+customer: customer / customer123
+```
+
 ## Smoke Test
 
 The booking module has a dev-only seed availability slot so the reservation
-flow can be tested through real HTTP requests.
+flow can be tested through real HTTP requests. The same flow works with
+`dev-postgres`; use `-u customer:customer123` for reservation endpoints and
+`-u admin:admin123` for admin endpoints.
 
 Start booking with the `dev` profile:
 
@@ -117,6 +161,7 @@ In another terminal:
 
 ```bash
 curl -i -X POST http://localhost:8082/api/v1/reservations \
+  -u customer:customer123 \
   -H "Content-Type: application/json" \
   -d '{
     "availabilitySlotId": 1,
@@ -127,11 +172,11 @@ curl -i -X POST http://localhost:8082/api/v1/reservations \
 ```
 
 ```bash
-curl -i http://localhost:8082/api/v1/reservations/1
+curl -i -u customer:customer123 http://localhost:8082/api/v1/reservations/1
 ```
 
 ```bash
-curl -i -X DELETE http://localhost:8082/api/v1/reservations/1
+curl -i -X DELETE -u customer:customer123 http://localhost:8082/api/v1/reservations/1
 ```
 
 For the full endpoint list and examples, see
@@ -145,7 +190,6 @@ Offer:
 GET    /api/v1/offers
 GET    /api/v1/offers/{offerId}
 GET    /api/v1/admin/offers
-GET    /api/v1/admin/offers/{offerId}
 POST   /api/v1/admin/offers
 PATCH  /api/v1/admin/offers/{offerId}
 DELETE /api/v1/admin/offers/{offerId}
@@ -171,7 +215,9 @@ GET    /api/v1/admin/availability/{slotId}/reservations
 DELETE /api/v1/reservations/{reservationId}
 ```
 
-Note: admin endpoints are not authenticated yet.
+Admin endpoints require HTTP Basic credentials with the `ADMIN` role. Booking
+reservation endpoints require the `CUSTOMER` or `ADMIN` role. Public offer and
+availability read endpoints remain unauthenticated.
 
 ## MVP Architecture
 
@@ -190,9 +236,9 @@ Latest local full reactor result:
 
 ```text
 mvn test
-offer:        42 tests
-availability: 64 tests
-booking:      55 tests
+offer:        46 tests
+availability: 68 tests
+booking:      59 tests
 BUILD SUCCESS
 
 mvn -DskipTests package

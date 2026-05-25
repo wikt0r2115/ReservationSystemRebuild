@@ -2,8 +2,20 @@
 
 Base path: `/api/v1`.
 
-The current MVP has no authentication. Paths containing `/admin/` represent
-admin intent and are ready for a later Spring Security layer.
+The current MVP uses HTTP Basic authentication:
+
+```text
+admin:    admin / admin123
+customer: customer / customer123
+```
+
+Rules:
+
+```text
+Public GET /offers and /offers/{offerId}/availability: no authentication.
+Admin endpoints under /admin/**: ADMIN role.
+Reservation endpoints under /reservations/**: CUSTOMER or ADMIN role.
+```
 
 ## Error Shape
 
@@ -50,13 +62,14 @@ curl http://localhost:8080/api/v1/offers/1
 Admin list all offers:
 
 ```bash
-curl http://localhost:8080/api/v1/admin/offers
+curl -u admin:admin123 http://localhost:8080/api/v1/admin/offers
 ```
 
 Admin create offer:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/admin/offers \
+  -u admin:admin123 \
   -H "Content-Type: application/json" \
   -d '{
     "name": "City Tour",
@@ -70,6 +83,7 @@ Admin partial update:
 
 ```bash
 curl -X PATCH http://localhost:8080/api/v1/admin/offers/1 \
+  -u admin:admin123 \
   -H "Content-Type: application/json" \
   -d '{
     "price": 219.99
@@ -79,7 +93,7 @@ curl -X PATCH http://localhost:8080/api/v1/admin/offers/1 \
 Admin archive:
 
 ```bash
-curl -X DELETE http://localhost:8080/api/v1/admin/offers/1
+curl -u admin:admin123 -X DELETE http://localhost:8080/api/v1/admin/offers/1
 ```
 
 ## Availability API
@@ -94,6 +108,7 @@ Admin create slot:
 
 ```bash
 curl -X POST http://localhost:8081/api/v1/admin/offers/1/availability \
+  -u admin:admin123 \
   -H "Content-Type: application/json" \
   -d '{
     "startsAt": "2099-06-02T10:00:00",
@@ -106,6 +121,7 @@ Admin partial update:
 
 ```bash
 curl -X PATCH http://localhost:8081/api/v1/admin/availability/1 \
+  -u admin:admin123 \
   -H "Content-Type: application/json" \
   -d '{
     "capacity": 12
@@ -115,7 +131,7 @@ curl -X PATCH http://localhost:8081/api/v1/admin/availability/1 \
 Admin cancel slot:
 
 ```bash
-curl -X DELETE http://localhost:8081/api/v1/admin/availability/1
+curl -u admin:admin123 -X DELETE http://localhost:8081/api/v1/admin/availability/1
 ```
 
 ## Booking API
@@ -124,6 +140,7 @@ Create reservation:
 
 ```bash
 curl -X POST http://localhost:8082/api/v1/reservations \
+  -u customer:customer123 \
   -H "Content-Type: application/json" \
   -d '{
     "availabilitySlotId": 1,
@@ -136,31 +153,31 @@ curl -X POST http://localhost:8082/api/v1/reservations \
 Get reservation by id:
 
 ```bash
-curl http://localhost:8082/api/v1/reservations/1
+curl -u customer:customer123 http://localhost:8082/api/v1/reservations/1
 ```
 
 Find reservations by customer email:
 
 ```bash
-curl "http://localhost:8082/api/v1/reservations?customerEmail=jan@example.com"
+curl -u customer:customer123 "http://localhost:8082/api/v1/reservations?customerEmail=jan@example.com"
 ```
 
 Admin list all reservations:
 
 ```bash
-curl http://localhost:8082/api/v1/admin/reservations
+curl -u admin:admin123 http://localhost:8082/api/v1/admin/reservations
 ```
 
 Admin list reservations for a slot:
 
 ```bash
-curl http://localhost:8082/api/v1/admin/availability/1/reservations
+curl -u admin:admin123 http://localhost:8082/api/v1/admin/availability/1/reservations
 ```
 
 Cancel reservation:
 
 ```bash
-curl -X DELETE http://localhost:8082/api/v1/reservations/1
+curl -u customer:customer123 -X DELETE http://localhost:8082/api/v1/reservations/1
 ```
 
 ## Booking Business Rules
