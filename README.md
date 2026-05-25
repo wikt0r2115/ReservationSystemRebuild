@@ -1,168 +1,201 @@
 # Reservation System Backend
 
-Spring Boot backend for a reservation system. The project is currently in an
-early refactor stage: the existing module manages offers, and the planned final
-shape adds availability slots, reservations, PostgreSQL, migrations,
-integration tests and Docker-based local development.
+Spring Boot backend for a reservation system. The current MVP contains three
+tested modules: offers, availability slots and reservations.
+
+The project is intentionally still a portfolio MVP. It uses H2 for local/dev
+runs, has no authentication yet, and keeps production hardening items such as
+PostgreSQL, migrations and Docker Compose as explicit next steps.
 
 ## Current Status
 
 - Java 21
 - Spring Boot 4.0.6
-- Maven Wrapper
+- Maven
 - Spring Web MVC
 - Spring Data JPA
 - Bean Validation
-- H2 for the current local development setup
-- OpenAPI UI through Springdoc
+- H2 for current local/dev/test setup
+- OpenAPI UI through Springdoc in the `dev` profile
 
 Current Maven modules:
 
 ```text
 reservation/offer
 reservation/availability
+reservation/booking
 ```
 
-## Roadmap
+## Documentation
 
-The final project design is documented in
-[docs/final-project-design.md](docs/final-project-design.md).
-
-The detailed V1 plan for the first module is documented in
-[docs/offer-module-v1-plan.md](docs/offer-module-v1-plan.md).
-
-High-level milestones:
-
-1. Repository cleanup and current offer module stabilization.
-2. Complete offer CRUD with tests and consistent errors.
-3. Add availability slots.
-4. Add reservation creation, cancellation and status transitions.
-5. Add PostgreSQL, Flyway, Testcontainers, Docker Compose and CI.
-6. Polish README, API examples and demo flow for portfolio use.
-
-## Requirements
-
-- Java 21
-- Git
-- No local Maven installation required. Use Maven Wrapper.
+- Final project direction: [docs/final-project-design.md](docs/final-project-design.md)
+- Offer V1 plan: [docs/offer-module-v1-plan.md](docs/offer-module-v1-plan.md)
+- Implemented MVP API: [docs/api-contract.md](docs/api-contract.md)
+- Current architecture decision: [docs/mvp-architecture.md](docs/mvp-architecture.md)
 
 ## Build And Test
 
-From the offer module:
+Run the full reactor from the aggregator:
 
 ```bash
-cd reservation/offer
-./mvnw test
+cd reservation
+mvn test
 ```
 
-From the availability module:
+Run a focused module with its dependencies:
 
 ```bash
-cd reservation/availability
-./mvnw test
+mvn test -pl booking -am
 ```
 
 Run a single test class:
 
 ```bash
-./mvnw -Dtest=OfferServiceTest test
+mvn -pl booking -Dtest=ReservationServiceTest test
 ```
 
 Run a single test method:
 
 ```bash
-./mvnw -Dtest=OfferServiceTest#createOffer_savesNewOffer test
+mvn -pl booking -Dtest=ReservationServiceTest#createReservation_reservesAvailabilitySlotAndSavesReservation test
 ```
 
-Build the application:
+Build all modules:
 
 ```bash
-./mvnw clean package
+mvn clean package
 ```
 
-Run locally:
+## Run Locally
+
+Run one module as an executable Spring Boot jar:
 
 ```bash
-./mvnw spring-boot:run
+cd reservation
+mvn -pl booking -am -DskipTests package
+java -jar booking/target/booking-0.0.1-SNAPSHOT-exec.jar
 ```
 
-The API starts on:
+The `-am` flag builds required module dependencies first. The executable jar
+uses the `exec` classifier so the plain module jar remains usable as a Maven
+dependency by other modules.
+
+Default module ports:
 
 ```text
-http://localhost:8080
+offer:        http://localhost:8080
+availability: http://localhost:8081
+booking:      http://localhost:8082
 ```
 
-Swagger UI:
+Swagger UI is enabled in the `dev` profile and disabled in default/test/prod:
 
 ```text
-http://localhost:8080/swagger-ui.html
+http://localhost:<port>/swagger-ui.html
 ```
 
-H2 console for the current development setup:
+H2 console is enabled in the `dev` profile:
 
 ```text
-http://localhost:8080/h2-console
+http://localhost:<port>/h2-console
 ```
 
-## Current API
+## Smoke Test
 
-Public list active offers:
+The booking module has a dev-only seed availability slot so the reservation
+flow can be tested through real HTTP requests.
+
+Start booking with the `dev` profile:
 
 ```bash
-curl http://localhost:8080/api/v1/offers
+cd reservation
+mvn -pl booking -am -DskipTests package
+java -jar booking/target/booking-0.0.1-SNAPSHOT-exec.jar --spring.profiles.active=dev
 ```
 
-Public get active offer by id:
+In another terminal:
 
 ```bash
-curl http://localhost:8080/api/v1/offers/1
-```
-
-Admin list all offers (active + archived):
-
-```bash
-curl http://localhost:8080/api/v1/admin/offers
-```
-
-Admin get offer by id:
-
-```bash
-curl http://localhost:8080/api/v1/admin/offers/1
-```
-
-Admin create offer:
-
-```bash
-curl -X POST http://localhost:8080/api/v1/admin/offers \
+curl -i -X POST http://localhost:8082/api/v1/reservations \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "City Tour",
-    "imageUrl": "https://example.com/city.jpg",
-    "description": "Full day city tour",
-    "price": 199.99
+    "availabilitySlotId": 1,
+    "customerName": "Jan Kowalski",
+    "customerEmail": "jan@example.com",
+    "partySize": 2
   }'
 ```
 
-Admin update offer (partial):
-
 ```bash
-curl -X PATCH http://localhost:8080/api/v1/admin/offers/1 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "price": 219.99
-  }'
+curl -i http://localhost:8082/api/v1/reservations/1
 ```
 
-Admin archive offer:
-
 ```bash
-curl -X DELETE http://localhost:8080/api/v1/admin/offers/1
+curl -i -X DELETE http://localhost:8082/api/v1/reservations/1
 ```
 
-Note: in V1, admin endpoints are not authenticated yet.
+For the full endpoint list and examples, see
+[docs/api-contract.md](docs/api-contract.md).
 
-## Notes
+## Current API Summary
 
-This is not portfolio-ready yet. The immediate goal is to stabilize the current
-offer module, then evolve it into a complete reservation backend with a
-production-like local setup and integration test coverage.
+Offer:
+
+```text
+GET    /api/v1/offers
+GET    /api/v1/offers/{offerId}
+GET    /api/v1/admin/offers
+GET    /api/v1/admin/offers/{offerId}
+POST   /api/v1/admin/offers
+PATCH  /api/v1/admin/offers/{offerId}
+DELETE /api/v1/admin/offers/{offerId}
+```
+
+Availability:
+
+```text
+GET    /api/v1/offers/{offerId}/availability
+POST   /api/v1/admin/offers/{offerId}/availability
+PATCH  /api/v1/admin/availability/{slotId}
+DELETE /api/v1/admin/availability/{slotId}
+```
+
+Booking:
+
+```text
+POST   /api/v1/reservations
+GET    /api/v1/reservations/{reservationId}
+GET    /api/v1/reservations?customerEmail=...
+GET    /api/v1/admin/reservations
+GET    /api/v1/admin/availability/{slotId}/reservations
+DELETE /api/v1/reservations/{reservationId}
+```
+
+Note: admin endpoints are not authenticated yet.
+
+## MVP Architecture
+
+The current backend should be treated as a modular Spring Boot MVP with three
+separate runnable modules. Booking directly depends on the availability module
+and uses its JPA entity/repository to reserve and release slot capacity in one
+transaction.
+
+This is acceptable for the current MVP and tests. If the project evolves into
+separate production microservices, booking must stop directly using
+availability repositories and switch to an HTTP/event/contract boundary.
+
+## Current Verification
+
+Latest local full reactor result:
+
+```text
+mvn test
+offer:        42 tests
+availability: 64 tests
+booking:      55 tests
+BUILD SUCCESS
+
+mvn -DskipTests package
+plain module jars plus executable *-exec.jar artifacts
+BUILD SUCCESS
+```
