@@ -38,8 +38,7 @@ public class AvailabilitySlot {
     @Enumerated(EnumType.STRING)
     private AvailabilityStatus status;
 
-    protected AvailabilitySlot() {
-    }
+    protected AvailabilitySlot() {}
 
     public static AvailabilitySlot create(Long offerId, LocalDateTime startsAt, LocalDateTime endsAt, int capacity) {
         return create(offerId, startsAt, endsAt, capacity, Clock.systemDefaultZone());
