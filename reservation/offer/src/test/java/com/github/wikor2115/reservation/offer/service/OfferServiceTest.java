@@ -33,14 +33,14 @@ class OfferServiceTest {
 
     @Test
     void createOffer_savesNewOffer() {
-        when(offerRepository.save(any(Offer.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(offerRepository.save(any(Offer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         Offer offer = offerService.createOffer(
                 "City Tour",
                 "https://example.com/city.jpg",
                 "Full day city tour",
-                new BigDecimal("199.99")
-        );
+                new BigDecimal("199.99"));
 
         assertEquals("City Tour", offer.getName());
         assertEquals(new BigDecimal("199.99"), offer.getPrice());
@@ -101,8 +101,7 @@ class OfferServiceTest {
                 "Updated Name",
                 null,
                 "Updated description",
-                new BigDecimal("99.99")
-        );
+                new BigDecimal("99.99"));
 
         assertEquals("Updated Name", updated.getName());
         assertEquals("Updated description", updated.getDescription());
@@ -117,8 +116,7 @@ class OfferServiceTest {
 
         assertThrows(
                 OfferNotFoundException.class,
-                () -> offerService.updateOffer(404L, "Name", null, null, null)
-        );
+                () -> offerService.updateOffer(404L, "Name", null, null, null));
     }
 
     @Test
@@ -129,8 +127,7 @@ class OfferServiceTest {
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
-                () -> offerService.updateOffer(10L, "Updated Name", null, null, null)
-        );
+                () -> offerService.updateOffer(10L, "Updated Name", null, null, null));
 
         assertEquals("Offer is archived", exception.getMessage());
         verify(offerRepository, never()).save(any());
@@ -165,8 +162,7 @@ class OfferServiceTest {
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
-                () -> offerService.archiveOffer(10L)
-        );
+                () -> offerService.archiveOffer(10L));
 
         assertEquals("Offer is archived", exception.getMessage());
         verify(offerRepository, never()).save(any());
@@ -177,7 +173,6 @@ class OfferServiceTest {
                 "Kayak Trip",
                 "https://example.com/kayak.jpg",
                 "Half-day kayaking",
-                new BigDecimal("79.90")
-        );
+                new BigDecimal("79.90"));
     }
 }

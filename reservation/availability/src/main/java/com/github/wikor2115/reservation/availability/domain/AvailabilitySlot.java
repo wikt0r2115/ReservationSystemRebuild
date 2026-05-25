@@ -87,7 +87,7 @@ public class AvailabilitySlot {
     public void reserve(int partySize) {
         ensureOpen();
         validatePartySize(partySize);
-        if (this.reservedCount + partySize > capacity)
+        if (partySize > this.capacity - this.reservedCount)
             throw new IllegalArgumentException("Reservation would exceed capacity of " + this.capacity);
         reservedCount += partySize;
     }

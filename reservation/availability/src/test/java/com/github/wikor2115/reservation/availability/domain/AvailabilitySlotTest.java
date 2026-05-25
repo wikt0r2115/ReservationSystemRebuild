@@ -72,6 +72,12 @@ class AvailabilitySlotTest {
     }
 
     @Test
+    void create_whenCapacityIsNegative_throwsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class,
+                () -> AvailabilitySlot.create(OFFER_ID, STARTS_AT, ENDS_AT, -1, CLOCK));
+    }
+
+    @Test
     void changeTime_validData_updatesTime() {
         AvailabilitySlot slot = sampleSlot();
         slot.changeTime(futureStartsAt(), futureEndsAt(), CLOCK);
@@ -100,6 +106,18 @@ class AvailabilitySlotTest {
     }
 
     @Test
+    void changeCapacity_whenCapacityIsZero_throwsIllegalArgumentException() {
+        AvailabilitySlot slot = sampleSlot();
+        assertThrows(IllegalArgumentException.class, () -> slot.changeCapacity(0));
+    }
+
+    @Test
+    void changeCapacity_whenCancelled_throwsIllegalStateException() {
+        AvailabilitySlot slot = cancelledSlot();
+        assertThrows(IllegalStateException.class, () -> slot.changeCapacity(20));
+    }
+
+    @Test
     void reserve_validPartySize_increasesReservedCount() {
         AvailabilitySlot slot = sampleSlotWithCapacity(20);
         slot.reserve(10);
@@ -120,6 +138,27 @@ class AvailabilitySlotTest {
     }
 
     @Test
+    void reserve_whenPartySizeIsZero_throwsIllegalArgumentException() {
+        AvailabilitySlot slot = sampleSlot();
+        assertThrows(IllegalArgumentException.class, () -> slot.reserve(0));
+    }
+
+    @Test
+    void reserve_whenPartySizeIsNegative_throwsIllegalArgumentException() {
+        AvailabilitySlot slot = sampleSlot();
+        assertThrows(IllegalArgumentException.class, () -> slot.reserve(-1));
+    }
+
+    @Test
+    void reserve_whenAddingPartySizeWouldOverflowReservedCount_throwsIllegalArgumentException() {
+        AvailabilitySlot slot = sampleSlotWithCapacity(Integer.MAX_VALUE);
+        slot.reserve(Integer.MAX_VALUE);
+
+        assertThrows(IllegalArgumentException.class, () -> slot.reserve(1));
+        assertEquals(Integer.MAX_VALUE, slot.getReservedCount());
+    }
+
+    @Test
     void release_validPartySize_decreasesReservedCount() {
         AvailabilitySlot slot = sampleSlotWithCapacity(20);
         slot.reserve(10);
@@ -131,6 +170,25 @@ class AvailabilitySlotTest {
     void release_whenPartySizeExceedsReservedCount_throwsIllegalArgumentException() {
         AvailabilitySlot slot = sampleSlotWithCapacity(20);
         assertThrows(IllegalArgumentException.class, () -> slot.release(50));
+    }
+
+    @Test
+    void release_whenPartySizeIsZero_throwsIllegalArgumentException() {
+        AvailabilitySlot slot = slotWithReservedCount(5);
+        assertThrows(IllegalArgumentException.class, () -> slot.release(0));
+    }
+
+    @Test
+    void release_whenPartySizeIsNegative_throwsIllegalArgumentException() {
+        AvailabilitySlot slot = slotWithReservedCount(5);
+        assertThrows(IllegalArgumentException.class, () -> slot.release(-1));
+    }
+
+    @Test
+    void release_whenCancelled_throwsIllegalStateException() {
+        AvailabilitySlot slot = slotWithReservedCount(5);
+        slot.cancel();
+        assertThrows(IllegalStateException.class, () -> slot.release(1));
     }
 
     @Test
@@ -154,6 +212,12 @@ class AvailabilitySlotTest {
     }
 
     @Test
+    void reopen_whenOpen_throwsIllegalStateException() {
+        AvailabilitySlot slot = sampleSlot();
+        assertThrows(IllegalStateException.class, () -> slot.reopen());
+    }
+
+    @Test
     void reopen_whenCancelled_throwsIllegalStateException() {
         AvailabilitySlot slot = sampleSlot();
         slot.cancel();
@@ -162,14 +226,15 @@ class AvailabilitySlotTest {
 
     @Test
     void cancel_whenOpen_changesStatusToCancelled() {
-        AvailabilitySlot slot = cancelledSlot();
+        AvailabilitySlot slot = sampleSlot();
+        slot.cancel();
         assertEquals(AvailabilityStatus.CANCELLED, slot.getStatus());
     }
 
     @Test
     void cancel_whenAlreadyCancelled_throwsIllegalStateException() {
         AvailabilitySlot slot = cancelledSlot();
-        assertThrows(IllegalStateException.class, ()->slot.cancel());
+        assertThrows(IllegalStateException.class, () -> slot.cancel());
     }
 
     private static AvailabilitySlot sampleSlot() {
