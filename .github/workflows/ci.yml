@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test full reactor
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: reservation
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: |
+            reservation/pom.xml
+            reservation/offer/pom.xml
+            reservation/availability/pom.xml
+            reservation/booking/pom.xml
+
+      - name: Run tests
+        run: mvn -B clean test
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: reservation/**/target/surefire-reports
+          if-no-files-found: ignore
+
+  package:
+    name: Package full reactor
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+
+    defaults:
+      run:
+        working-directory: reservation
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: |
+            reservation/pom.xml
+            reservation/offer/pom.xml
+            reservation/availability/pom.xml
+            reservation/booking/pom.xml
+
+      - name: Build package
+        run: mvn -B -DskipTests package
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-jars
+          path: reservation/*/target/*.jar
+          if-no-files-found: error

@@ -7,7 +7,7 @@ import com.github.wikor2115.reservation.offer.service.OfferService;
 import java.util.List;
 
 @RestController
-@RequestMapping("/offers")
+@RequestMapping("/api/v1")
 public class OfferController {
     private final OfferService offerService;
 
@@ -15,39 +15,53 @@ public class OfferController {
         this.offerService = offerService;
     }
 
-    @GetMapping
-    public List<OfferDTO> getActiveOffers(){
-        return offerService.findActiveOffers().stream().map(offer -> new OfferDTO(
-                offer.getId(),
-                offer.getName(),
-                offer.getImageUrl(),
-                offer.getDescription(),
-                offer.getPrice()
-        )).toList();
+    @GetMapping("/offers")
+    public List<OfferResponse> getActiveOffers(){
+        return offerService.findActiveOffers().stream().map(this::toResponse).toList();
     }
 
-    @PostMapping
+    @GetMapping("/offers/{offerId}")
+    public OfferResponse getActiveOfferById(@PathVariable Long offerId) {
+        return toResponse(offerService.findActiveOfferById(offerId));
+    }
+
+    @GetMapping("/admin/offers")
+    public List<OfferResponse> getAdminOffers() {
+        return offerService.findAllOffers().stream().map(this::toResponse).toList();
+    }
+
+    @PostMapping("/admin/offers")
     @ResponseStatus(HttpStatus.CREATED)
-    public OfferDTO createOffer(@Valid @RequestBody CreateOfferRequest request){
+    public OfferResponse createOffer(@Valid @RequestBody CreateOfferRequest request){
         var offer = offerService.createOffer(request.name(), request.imageUrl(), request.description(), request.price());
-        return new OfferDTO(
-                offer.getId(),
-                offer.getName(),
-                offer.getImageUrl(),
-                offer.getDescription(),
-                offer.getPrice()
-        );
+        return toResponse(offer);
     }
 
-    @PutMapping("/{offerId}/archive")
-    public OfferDTO archiveOffer(@PathVariable Long offerId) {
+    @PatchMapping("/admin/offers/{offerId}")
+    public OfferResponse updateOffer(@PathVariable Long offerId, @Valid @RequestBody UpdateOfferRequest request) {
+        return toResponse(offerService.updateOffer(
+                offerId,
+                request.name(),
+                request.imageUrl(),
+                request.description(),
+                request.price()
+        ));
+    }
+
+    @DeleteMapping("/admin/offers/{offerId}")
+    public OfferResponse archiveOffer(@PathVariable Long offerId) {
         var offer = offerService.archiveOffer(offerId);
-        return new OfferDTO(
+        return toResponse(offer);
+    }
+
+    private OfferResponse toResponse(com.github.wikor2115.reservation.offer.domain.Offer offer) {
+        return new OfferResponse(
                 offer.getId(),
                 offer.getName(),
                 offer.getImageUrl(),
                 offer.getDescription(),
-                offer.getPrice()
+                offer.getPrice(),
+                offer.isArchived()
         );
     }
 }
