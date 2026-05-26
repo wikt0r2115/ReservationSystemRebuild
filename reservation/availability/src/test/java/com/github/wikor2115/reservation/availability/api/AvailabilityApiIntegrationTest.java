@@ -92,6 +92,12 @@ class AvailabilityApiIntegrationTest {
         mockMvc.perform(get("/api/v1/offers/{offerId}/availability", offerId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
+
+        mockMvc.perform(get("/api/v1/admin/offers/{offerId}/availability", offerId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(slotId))
+                .andExpect(jsonPath("$[0].status").value("CANCELLED"));
     }
 
     @Test

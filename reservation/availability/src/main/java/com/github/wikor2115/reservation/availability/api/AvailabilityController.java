@@ -32,6 +32,11 @@ public class AvailabilityController {
         return availabilityService.findOpenSlotsByOfferId(offerId).stream().map(this::toResponse).toList();
     }
 
+    @GetMapping("/admin/offers/{offerId}/availability")
+    public List<AvailabilitySlotResponse> findSlotsByOfferId(@PathVariable Long offerId){
+        return availabilityService.findSlotsByOfferId(offerId).stream().map(this::toResponse).toList();
+    }
+
     @PostMapping("/admin/offers/{offerId}/availability")
     @ResponseStatus(HttpStatus.CREATED)
     public AvailabilitySlotResponse createSlot(@PathVariable Long offerId, @Valid @RequestBody CreateAvailabilitySlotRequest request){

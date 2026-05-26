@@ -65,6 +65,20 @@ class AvailabilityControllerTest {
     }
 
     @Test
+    void findSlotsByOfferId_returnsAllSlots() throws Exception {
+        AvailabilitySlot openSlot = sampleSlot(SLOT_ID, OFFER_ID, STARTS_AT, ENDS_AT, 10);
+        AvailabilitySlot cancelledSlot = sampleSlot(11L, OFFER_ID, STARTS_AT.plusDays(1), ENDS_AT.plusDays(1), 10);
+        cancelledSlot.cancel();
+        availabilityService.allSlots = List.of(openSlot, cancelledSlot);
+
+        mockMvc.perform(get("/api/v1/admin/offers/{offerId}/availability", OFFER_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].status").value("OPEN"))
+                .andExpect(jsonPath("$[1].status").value("CANCELLED"));
+    }
+
+    @Test
     void createSlot_validRequest_returnsCreatedSlot() throws Exception {
         mockMvc.perform(post("/api/v1/admin/offers/{offerId}/availability", OFFER_ID)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -221,6 +235,7 @@ class AvailabilityControllerTest {
 
     private static final class StubAvailabilityService extends AvailabilityService {
         private List<AvailabilitySlot> openSlots = List.of(sampleSlot(SLOT_ID, OFFER_ID, STARTS_AT, ENDS_AT, 10));
+        private List<AvailabilitySlot> allSlots = openSlots;
         private RuntimeException createException;
         private RuntimeException updateException;
         private RuntimeException cancelException;
@@ -232,6 +247,11 @@ class AvailabilityControllerTest {
         @Override
         public List<AvailabilitySlot> findOpenSlotsByOfferId(Long offerId) {
             return openSlots;
+        }
+
+        @Override
+        public List<AvailabilitySlot> findSlotsByOfferId(Long offerId) {
+            return allSlots;
         }
 
         @Override

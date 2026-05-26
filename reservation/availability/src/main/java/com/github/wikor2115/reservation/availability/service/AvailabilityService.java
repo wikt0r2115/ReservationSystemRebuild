@@ -3,6 +3,7 @@ package com.github.wikor2115.reservation.availability.service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,7 +23,7 @@ public class AvailabilityService {
     public AvailabilitySlot createSlot(Long offerId, LocalDateTime startsAt, LocalDateTime endsAt, int capacity) {
         AvailabilitySlot slot = AvailabilitySlot.create(offerId, startsAt, endsAt, capacity);
         ensureSlotIsUnique(slot.getOfferId(), slot.getStartsAt(), slot.getEndsAt());
-        return slotRepository.save(slot);
+        return saveSlotOrThrowDuplicate(slot);
     }
 
     @Transactional(readOnly = true)
@@ -47,14 +48,14 @@ public class AvailabilityService {
         }
         if (capacity != null)
             slot.changeCapacity(capacity);
-        return slotRepository.save(slot);
+        return saveSlotOrThrowDuplicate(slot);
     }
 
     @Transactional
     public AvailabilitySlot cancelSlot(Long slotId) {
         AvailabilitySlot slot = findSlotOrThrow(slotId);
         slot.cancel();
-        return slotRepository.save(slot);
+        return saveSlotOrThrowDuplicate(slot);
     }
 
     private AvailabilitySlot findSlotOrThrow(Long slotId) {
@@ -71,4 +72,22 @@ public class AvailabilityService {
         if (slotRepository.existsByOfferIdAndStartsAtAndEndsAtAndIdNot(offerId, startsAt, endsAt, slotId))
             throw new DuplicateAvailabilitySlotException();
     }
+
+    private AvailabilitySlot saveSlotOrThrowDuplicate(AvailabilitySlot slot) {
+        try {
+            return slotRepository.saveAndFlush(slot);
+        } catch (DataIntegrityViolationException exception) {
+            if (isDuplicateSlotConstraintViolation(exception)) {
+                throw new DuplicateAvailabilitySlotException();
+            }
+            throw exception;
+        }
+    }
+
+    private boolean isDuplicateSlotConstraintViolation(DataIntegrityViolationException exception) {
+        String message = exception.getMostSpecificCause().getMessage();
+        return message != null
+                && message.toLowerCase().contains("uq_availability_slot_offer_time");
+    }
+
 }

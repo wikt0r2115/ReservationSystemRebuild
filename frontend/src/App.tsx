@@ -12,7 +12,12 @@ import {
   XCircle,
 } from 'lucide-react';
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
-import { createAvailabilitySlot, listOpenSlots } from './api/availability';
+import {
+  cancelAvailabilitySlot,
+  createAvailabilitySlot,
+  listAdminSlots,
+  listOpenSlots,
+} from './api/availability';
 import { ApiRequestError } from './api/client';
 import { createOffer, listActiveOffers, listAdminOffers } from './api/offers';
 import { cancelReservation, createReservation, listAdminReservations } from './api/reservations';
@@ -72,6 +77,8 @@ export function App() {
   const [lastReservation, setLastReservation] = useState<Reservation | null>(null);
   const [adminReservations, setAdminReservations] = useState<Reservation[]>([]);
   const [adminOffers, setAdminOffers] = useState<Offer[]>([]);
+  const [adminSlots, setAdminSlots] = useState<AvailabilitySlot[]>([]);
+  const [selectedAdminOfferId, setSelectedAdminOfferId] = useState<number | null>(null);
   const [adminCredentials, setAdminCredentials] = useState<Credentials>({
     username: 'admin',
     password: 'admin123',
@@ -80,8 +87,10 @@ export function App() {
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isSubmittingReservation, setIsSubmittingReservation] = useState(false);
   const [isLoadingAdmin, setIsLoadingAdmin] = useState(false);
+  const [isLoadingAdminSlots, setIsLoadingAdminSlots] = useState(false);
   const [isCreatingOffer, setIsCreatingOffer] = useState(false);
   const [isCreatingSlot, setIsCreatingSlot] = useState(false);
+  const [cancellingSlotId, setCancellingSlotId] = useState<number | null>(null);
   const [error, setError] = useState<ApiErrorResponse | null>(null);
 
   const selectedOffer = useMemo(
@@ -220,10 +229,43 @@ export function App() {
       ]);
       setAdminReservations(reservations);
       setAdminOffers(allOffers);
+      setSelectedAdminOfferId((current) =>
+        allOffers.some((offer) => offer.id === current) ? current : allOffers[0]?.id ?? null,
+      );
+      setAdminSlots([]);
     } catch (caught) {
       setError(toApiError(caught));
     } finally {
       setIsLoadingAdmin(false);
+    }
+  }
+
+  async function loadAdminSlots(offerId: number) {
+    setIsLoadingAdminSlots(true);
+    setError(null);
+    try {
+      const loadedSlots = await listAdminSlots(offerId, adminCredentials);
+      setAdminSlots(loadedSlots);
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setIsLoadingAdminSlots(false);
+    }
+  }
+
+  async function cancelAdminSlot(slot: AvailabilitySlot) {
+    setCancellingSlotId(slot.id);
+    setError(null);
+    try {
+      const cancelledSlot = await cancelAvailabilitySlot(slot.id, adminCredentials);
+      setAdminSlots((current) => current.map((item) => (item.id === cancelledSlot.id ? cancelledSlot : item)));
+      if (selectedOfferId === slot.offerId) {
+        await loadSlots(slot.offerId);
+      }
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setCancellingSlotId(null);
     }
   }
 
@@ -245,6 +287,8 @@ export function App() {
       setAdminOffers((current) => [offer, ...current.filter((item) => item.id !== offer.id)]);
       setOffers((current) => [offer, ...current.filter((item) => item.id !== offer.id)]);
       setSelectedOfferId(offer.id);
+      setSelectedAdminOfferId(offer.id);
+      setAdminSlots([]);
       setSlotForm((current) => ({ ...current, offerId: String(offer.id) }));
     } catch (caught) {
       setError(toApiError(caught));
@@ -279,6 +323,9 @@ export function App() {
       setSelectedOfferId(offerId);
       setSlotForm({ ...createDefaultSlotForm(), offerId: String(offerId) });
       await loadSlots(offerId);
+      if (selectedAdminOfferId === offerId) {
+        await loadAdminSlots(offerId);
+      }
       setSelectedSlotId(slot.id);
     } catch (caught) {
       setError(toCreateSlotError(caught));
@@ -587,6 +634,69 @@ export function App() {
               </button>
             </form>
           </div>
+
+          <section className="admin-section" aria-labelledby="admin-slots-heading">
+            <h3 id="admin-slots-heading">
+              <CalendarDays size={16} aria-hidden="true" />
+              Slots
+            </h3>
+            <div className="admin-slot-toolbar">
+              <label>
+                Offer
+                <select
+                  value={selectedAdminOfferId ?? ''}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setSelectedAdminOfferId(value ? Number(value) : null);
+                    setAdminSlots([]);
+                  }}
+                >
+                  <option value="">Select offer</option>
+                  {adminOfferOptions.map((offer) => (
+                    <option value={offer.id} key={offer.id}>
+                      {offer.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={isLoadingAdminSlots || selectedAdminOfferId === null}
+                onClick={() => {
+                  if (selectedAdminOfferId !== null) {
+                    void loadAdminSlots(selectedAdminOfferId);
+                  }
+                }}
+              >
+                <RefreshCw size={18} aria-hidden="true" />
+                Load slots
+              </button>
+            </div>
+            <div className="reservation-list">
+              {adminSlots.length === 0 && !isLoadingAdminSlots ? <EmptyState label="No slots loaded" /> : null}
+              {adminSlots.map((slot) => (
+                <article className="reservation-row admin-slot-row" key={slot.id}>
+                  <div>
+                    <strong>{formatDateTime(slot.startsAt)}</strong>
+                    <span>
+                      {formatDateTime(slot.endsAt)} · {slot.reservedCount}/{slot.capacity}
+                    </span>
+                  </div>
+                  <span className={`status-pill ${slot.status.toLowerCase()}`}>{slot.status}</span>
+                  <button
+                    className="secondary-button danger compact-button"
+                    type="button"
+                    disabled={slot.status !== 'OPEN' || cancellingSlotId === slot.id}
+                    onClick={() => void cancelAdminSlot(slot)}
+                  >
+                    <XCircle size={16} aria-hidden="true" />
+                    Cancel
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
 
           <div className="admin-stats">
             <Metric label="Offers" value={adminOffers.length} />

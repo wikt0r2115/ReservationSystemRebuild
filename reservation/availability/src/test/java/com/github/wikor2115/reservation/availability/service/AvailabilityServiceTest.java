@@ -16,6 +16,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -46,7 +47,7 @@ class AvailabilityServiceTest {
 
     @Test
     void createSlot_savesNewSlot() {
-        when(slotRepository.save(any(AvailabilitySlot.class)))
+        when(slotRepository.saveAndFlush(any(AvailabilitySlot.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         AvailabilitySlot slot = availabilityService.createSlot(OFFER_ID, STARTS_AT, ENDS_AT, CAPACITY);
@@ -58,7 +59,7 @@ class AvailabilityServiceTest {
         assertEquals(AvailabilityStatus.OPEN, slot.getStatus());
 
         ArgumentCaptor<AvailabilitySlot> captor = ArgumentCaptor.forClass(AvailabilitySlot.class);
-        verify(slotRepository).save(captor.capture());
+        verify(slotRepository).saveAndFlush(captor.capture());
         assertEquals(OFFER_ID, captor.getValue().getOfferId());
     }
 
@@ -71,7 +72,33 @@ class AvailabilityServiceTest {
                 () -> availabilityService.createSlot(OFFER_ID, STARTS_AT, ENDS_AT, CAPACITY));
 
         assertEquals("Availability slot already exists for this offer and time range", exception.getMessage());
-        verify(slotRepository, never()).save(any());
+        verify(slotRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void createSlot_whenDatabaseUniqueConstraintFails_throwsDuplicateAvailabilitySlotException() {
+        when(slotRepository.saveAndFlush(any(AvailabilitySlot.class)))
+                .thenThrow(new DataIntegrityViolationException(
+                        "Unique index or primary key violation: uq_availability_slot_offer_time"));
+
+        DuplicateAvailabilitySlotException exception = assertThrows(
+                DuplicateAvailabilitySlotException.class,
+                () -> availabilityService.createSlot(OFFER_ID, STARTS_AT, ENDS_AT, CAPACITY));
+
+        assertEquals("Availability slot already exists for this offer and time range", exception.getMessage());
+        verify(slotRepository).saveAndFlush(any(AvailabilitySlot.class));
+    }
+
+    @Test
+    void createSlot_whenOtherDataIntegrityViolationFails_rethrowsOriginalException() {
+        when(slotRepository.saveAndFlush(any(AvailabilitySlot.class)))
+                .thenThrow(new DataIntegrityViolationException("chk_availability_slot_capacity_positive"));
+
+        assertThrows(
+                DataIntegrityViolationException.class,
+                () -> availabilityService.createSlot(OFFER_ID, STARTS_AT, ENDS_AT, CAPACITY));
+
+        verify(slotRepository).saveAndFlush(any(AvailabilitySlot.class));
     }
 
     @Test
@@ -101,14 +128,14 @@ class AvailabilityServiceTest {
     void updateSlotById_updatesCapacityOnly() {
         AvailabilitySlot slot = sampleSlot();
         when(slotRepository.findById(SLOT_ID)).thenReturn(Optional.of(slot));
-        when(slotRepository.save(slot)).thenReturn(slot);
+        when(slotRepository.saveAndFlush(slot)).thenReturn(slot);
 
         AvailabilitySlot result = availabilityService.updateSlotById(SLOT_ID, null, null, 20);
 
         assertEquals(STARTS_AT, result.getStartsAt());
         assertEquals(ENDS_AT, result.getEndsAt());
         assertEquals(20, result.getCapacity());
-        verify(slotRepository).save(slot);
+        verify(slotRepository).saveAndFlush(slot);
     }
 
     @Test
@@ -116,14 +143,14 @@ class AvailabilityServiceTest {
         AvailabilitySlot slot = sampleSlot();
         LocalDateTime newStartsAt = LocalDateTime.of(2026, 6, 2, 11, 0);
         when(slotRepository.findById(SLOT_ID)).thenReturn(Optional.of(slot));
-        when(slotRepository.save(slot)).thenReturn(slot);
+        when(slotRepository.saveAndFlush(slot)).thenReturn(slot);
 
         AvailabilitySlot result = availabilityService.updateSlotById(SLOT_ID, newStartsAt, null, null);
 
         assertEquals(newStartsAt, result.getStartsAt());
         assertEquals(ENDS_AT, result.getEndsAt());
         assertEquals(CAPACITY, result.getCapacity());
-        verify(slotRepository).save(slot);
+        verify(slotRepository).saveAndFlush(slot);
     }
 
     @Test
@@ -131,14 +158,14 @@ class AvailabilityServiceTest {
         AvailabilitySlot slot = sampleSlot();
         LocalDateTime newEndsAt = LocalDateTime.of(2026, 6, 2, 13, 0);
         when(slotRepository.findById(SLOT_ID)).thenReturn(Optional.of(slot));
-        when(slotRepository.save(slot)).thenReturn(slot);
+        when(slotRepository.saveAndFlush(slot)).thenReturn(slot);
 
         AvailabilitySlot result = availabilityService.updateSlotById(SLOT_ID, null, newEndsAt, null);
 
         assertEquals(STARTS_AT, result.getStartsAt());
         assertEquals(newEndsAt, result.getEndsAt());
         assertEquals(CAPACITY, result.getCapacity());
-        verify(slotRepository).save(slot);
+        verify(slotRepository).saveAndFlush(slot);
     }
 
     @Test
@@ -147,14 +174,14 @@ class AvailabilityServiceTest {
         LocalDateTime newStartsAt = LocalDateTime.of(2026, 6, 3, 10, 0);
         LocalDateTime newEndsAt = LocalDateTime.of(2026, 6, 3, 12, 0);
         when(slotRepository.findById(SLOT_ID)).thenReturn(Optional.of(slot));
-        when(slotRepository.save(slot)).thenReturn(slot);
+        when(slotRepository.saveAndFlush(slot)).thenReturn(slot);
 
         AvailabilitySlot result = availabilityService.updateSlotById(SLOT_ID, newStartsAt, newEndsAt, null);
 
         assertEquals(newStartsAt, result.getStartsAt());
         assertEquals(newEndsAt, result.getEndsAt());
         assertEquals(CAPACITY, result.getCapacity());
-        verify(slotRepository).save(slot);
+        verify(slotRepository).saveAndFlush(slot);
     }
 
     @Test
@@ -171,7 +198,7 @@ class AvailabilityServiceTest {
                 () -> availabilityService.updateSlotById(SLOT_ID, newStartsAt, newEndsAt, null));
 
         assertEquals("Availability slot already exists for this offer and time range", exception.getMessage());
-        verify(slotRepository, never()).save(any());
+        verify(slotRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -182,19 +209,19 @@ class AvailabilityServiceTest {
                 AvailabilitySlotNotFoundException.class,
                 () -> availabilityService.updateSlotById(SLOT_ID, STARTS_AT, ENDS_AT, CAPACITY));
 
-        verify(slotRepository, never()).save(any());
+        verify(slotRepository, never()).saveAndFlush(any());
     }
 
     @Test
     void cancelSlot_cancelsAndSavesSlot() {
         AvailabilitySlot slot = sampleSlot();
         when(slotRepository.findById(SLOT_ID)).thenReturn(Optional.of(slot));
-        when(slotRepository.save(slot)).thenReturn(slot);
+        when(slotRepository.saveAndFlush(slot)).thenReturn(slot);
 
         AvailabilitySlot result = availabilityService.cancelSlot(SLOT_ID);
 
         assertEquals(AvailabilityStatus.CANCELLED, result.getStatus());
-        verify(slotRepository).save(slot);
+        verify(slotRepository).saveAndFlush(slot);
     }
 
     @Test
@@ -203,7 +230,7 @@ class AvailabilityServiceTest {
 
         assertThrows(AvailabilitySlotNotFoundException.class, () -> availabilityService.cancelSlot(SLOT_ID));
 
-        verify(slotRepository, never()).save(any());
+        verify(slotRepository, never()).saveAndFlush(any());
     }
 
     private static AvailabilitySlot sampleSlot() {

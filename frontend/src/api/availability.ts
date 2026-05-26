@@ -8,6 +8,16 @@ export function listOpenSlots(offerId: number): Promise<AvailabilitySlot[]> {
   );
 }
 
+export function listAdminSlots(
+  offerId: number,
+  credentials: Credentials,
+): Promise<AvailabilitySlot[]> {
+  return requestJson<AvailabilitySlot[]>(
+    `${apiConfig.availabilityBaseUrl}/api/v1/admin/offers/${offerId}/availability`,
+    { credentials },
+  );
+}
+
 export function createAvailabilitySlot(
   offerId: number,
   payload: CreateAvailabilitySlotPayload,
@@ -18,6 +28,19 @@ export function createAvailabilitySlot(
     {
       method: 'POST',
       body: payload,
+      credentials,
+    },
+  );
+}
+
+export function cancelAvailabilitySlot(
+  slotId: number,
+  credentials: Credentials,
+): Promise<AvailabilitySlot> {
+  return requestJson<AvailabilitySlot>(
+    `${apiConfig.availabilityBaseUrl}/api/v1/admin/availability/${slotId}`,
+    {
+      method: 'DELETE',
       credentials,
     },
   );

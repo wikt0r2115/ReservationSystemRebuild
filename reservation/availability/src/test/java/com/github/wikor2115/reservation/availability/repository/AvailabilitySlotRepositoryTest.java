@@ -1,6 +1,7 @@
 package com.github.wikor2115.reservation.availability.repository;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
@@ -12,6 +13,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -88,6 +90,15 @@ class AvailabilitySlotRepositoryTest {
         assertEquals(earlierOpen.getStartsAt(), result.get(1).getStartsAt());
         assertEquals(laterOpen.getStartsAt(), result.get(2).getStartsAt());
         assertTrue(result.stream().allMatch(slot -> OFFER_ID.equals(slot.getOfferId())));
+    }
+
+    @Test
+    void save_whenSameOfferAndTimeAlreadyExists_violatesUniqueConstraint() {
+        availabilitySlotRepository.saveAndFlush(sampleSlot(OFFER_ID, startsAt(10)));
+
+        assertThrows(
+                DataIntegrityViolationException.class,
+                () -> availabilitySlotRepository.saveAndFlush(sampleSlot(OFFER_ID, startsAt(10))));
     }
 
     private static AvailabilitySlot sampleSlot(Long offerId, LocalDateTime startsAt) {

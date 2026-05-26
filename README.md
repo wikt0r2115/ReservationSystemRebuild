@@ -286,7 +286,7 @@ Latest local full reactor result:
 ```text
 mvn test
 offer:        46 tests
-availability: 72 tests
+availability: 76 tests
 booking:      59 tests
 BUILD SUCCESS
 
