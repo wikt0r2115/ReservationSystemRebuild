@@ -27,6 +27,7 @@ path plus simple HTTP Basic authentication for customer/admin flows.
 Current Maven modules:
 
 ```text
+reservation/security-common
 reservation/offer
 reservation/availability
 reservation/booking

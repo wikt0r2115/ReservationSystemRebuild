@@ -12,6 +12,7 @@
     <description>Aggregator pom for reservation modules</description>
 
     <modules>
+        <module>security-common</module>
         <module>offer</module>
         <module>availability</module>
         <module>booking</module>
