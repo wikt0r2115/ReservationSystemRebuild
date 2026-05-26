@@ -17,14 +17,18 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.github.wikor2115.reservation.availability.service.AvailabilitySlotNotFoundException;
 import com.github.wikor2115.reservation.booking.domain.Reservation;
 import com.github.wikor2115.reservation.booking.service.ReservationNotFoundException;
 import com.github.wikor2115.reservation.booking.service.ReservationService;
+import com.github.wikor2115.reservation.security.AuthenticatedUser;
+import com.github.wikor2115.reservation.security.UserRole;
 
 class ReservationControllerTest {
 
@@ -54,6 +58,7 @@ class ReservationControllerTest {
     @Test
     void createReservation_validRequest_returnsCreatedReservation() throws Exception {
         mockMvc.perform(post("/api/v1/reservations")
+                .with(customerAuth(CUSTOMER_EMAIL))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
@@ -76,6 +81,7 @@ class ReservationControllerTest {
     @Test
     void createReservation_invalidRequest_returnsValidationError() throws Exception {
         mockMvc.perform(post("/api/v1/reservations")
+                .with(customerAuth(CUSTOMER_EMAIL))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
@@ -95,6 +101,7 @@ class ReservationControllerTest {
     @Test
     void createReservation_whenRequestBodyHasInvalidType_returnsInvalidRequestBody() throws Exception {
         mockMvc.perform(post("/api/v1/reservations")
+                .with(customerAuth(CUSTOMER_EMAIL))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
@@ -114,6 +121,7 @@ class ReservationControllerTest {
         reservationService.createException = new AvailabilitySlotNotFoundException(404L);
 
         mockMvc.perform(post("/api/v1/reservations")
+                .with(customerAuth(CUSTOMER_EMAIL))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
@@ -134,6 +142,7 @@ class ReservationControllerTest {
         reservationService.createException = new IllegalArgumentException("Reservation would exceed capacity of 2");
 
         mockMvc.perform(post("/api/v1/reservations")
+                .with(customerAuth(CUSTOMER_EMAIL))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
@@ -150,7 +159,8 @@ class ReservationControllerTest {
 
     @Test
     void findReservationById_existingReservation_returnsReservation() throws Exception {
-        mockMvc.perform(get("/api/v1/reservations/{reservationId}", RESERVATION_ID))
+        mockMvc.perform(get("/api/v1/reservations/{reservationId}", RESERVATION_ID)
+                .with(customerAuth(CUSTOMER_EMAIL)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(RESERVATION_ID))
                 .andExpect(jsonPath("$.status").value("CONFIRMED"));
@@ -160,7 +170,8 @@ class ReservationControllerTest {
     void findReservationById_whenMissing_returnsNotFound() throws Exception {
         reservationService.findException = new ReservationNotFoundException(404L);
 
-        mockMvc.perform(get("/api/v1/reservations/404"))
+        mockMvc.perform(get("/api/v1/reservations/404")
+                .with(customerAuth(CUSTOMER_EMAIL)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESERVATION_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("Reservation with id 404 not found"))
@@ -169,7 +180,9 @@ class ReservationControllerTest {
 
     @Test
     void findReservationsByCustomerEmail_returnsReservations() throws Exception {
-        mockMvc.perform(get("/api/v1/reservations").param("customerEmail", CUSTOMER_EMAIL))
+        mockMvc.perform(get("/api/v1/reservations")
+                .with(customerAuth(CUSTOMER_EMAIL))
+                .param("customerEmail", CUSTOMER_EMAIL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(RESERVATION_ID))
                 .andExpect(jsonPath("$[0].customerEmail").value(CUSTOMER_EMAIL));
@@ -191,7 +204,8 @@ class ReservationControllerTest {
 
     @Test
     void cancelReservation_existingReservation_returnsCancelledReservation() throws Exception {
-        mockMvc.perform(delete("/api/v1/reservations/{reservationId}", RESERVATION_ID))
+        mockMvc.perform(delete("/api/v1/reservations/{reservationId}", RESERVATION_ID)
+                .with(customerAuth(CUSTOMER_EMAIL)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(RESERVATION_ID))
                 .andExpect(jsonPath("$.status").value("CANCELLED"))
@@ -202,10 +216,19 @@ class ReservationControllerTest {
     void cancelReservation_whenAlreadyCancelled_returnsBusinessRuleViolation() throws Exception {
         reservationService.cancelException = new IllegalStateException("Reservation is cancelled");
 
-        mockMvc.perform(delete("/api/v1/reservations/{reservationId}", RESERVATION_ID))
+        mockMvc.perform(delete("/api/v1/reservations/{reservationId}", RESERVATION_ID)
+                .with(customerAuth(CUSTOMER_EMAIL)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("BUSINESS_RULE_VIOLATION"))
                 .andExpect(jsonPath("$.message").value("Reservation is cancelled"));
+    }
+
+    @Test
+    void findReservationById_whenCustomerDoesNotOwnReservation_returnsForbidden() throws Exception {
+        mockMvc.perform(get("/api/v1/reservations/{reservationId}", RESERVATION_ID)
+                .with(customerAuth("anna@example.com")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("RESERVATION_ACCESS_DENIED"));
     }
 
     private static Reservation sampleReservation(Long reservationId, boolean cancelled) {
@@ -221,6 +244,15 @@ class ReservationControllerTest {
             reservation.cancel(CLOCK);
         }
         return reservation;
+    }
+
+    private static RequestPostProcessor customerAuth(String email) {
+        return request -> {
+            request.setUserPrincipal(new UsernamePasswordAuthenticationToken(
+                    new AuthenticatedUser(10L, email, UserRole.CUSTOMER),
+                    null));
+            return request;
+        };
     }
 
     private static final class StubReservationService extends ReservationService {

@@ -2,6 +2,7 @@ package com.github.wikor2115.reservation.auth.api;
 
 import static org.hamcrest.Matchers.emptyOrNullString;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -18,12 +19,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.github.wikor2115.reservation.auth.domain.UserAccount;
 import com.github.wikor2115.reservation.auth.service.AuthService;
 import com.github.wikor2115.reservation.auth.service.DuplicateUserAccountException;
+import com.github.wikor2115.reservation.security.AuthenticatedUser;
+import com.github.wikor2115.reservation.security.UserRole;
 
 @ExtendWith(MockitoExtension.class)
 class AuthControllerTest {
@@ -117,5 +122,50 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.token").value("jwt-token"))
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.expiresInSeconds").value(7200));
+    }
+
+    @Test
+    void changePassword_authenticatedUser_returnsNoContent() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/change-password")
+                .with(authenticatedCustomer())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "currentPassword": "customer123",
+                          "newPassword": "customer456"
+                        }
+                        """))
+                .andExpect(status().isNoContent());
+
+        verify(authService).changePassword(
+                new AuthenticatedUser(10L, "jan@example.com", UserRole.CUSTOMER),
+                "customer123",
+                "customer456");
+    }
+
+    @Test
+    void changePassword_withoutAuthentication_returnsForbidden() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/change-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "currentPassword": "customer123",
+                          "newPassword": "customer456"
+                        }
+                        """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+                .andExpect(jsonPath("$.details[0].field").value("authorization"));
+
+        verifyNoInteractions(authService);
+    }
+
+    private static RequestPostProcessor authenticatedCustomer() {
+        return request -> {
+            request.setUserPrincipal(new UsernamePasswordAuthenticationToken(
+                    new AuthenticatedUser(10L, "jan@example.com", UserRole.CUSTOMER),
+                    null));
+            return request;
+        };
     }
 }

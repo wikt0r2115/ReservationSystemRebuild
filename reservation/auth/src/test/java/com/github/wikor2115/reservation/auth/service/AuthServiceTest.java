@@ -3,6 +3,7 @@ package com.github.wikor2115.reservation.auth.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -26,6 +27,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import com.github.wikor2115.reservation.auth.api.AuthTokenResponse;
 import com.github.wikor2115.reservation.auth.domain.UserAccount;
 import com.github.wikor2115.reservation.auth.repository.UserAccountRepository;
+import com.github.wikor2115.reservation.security.AuthenticatedUser;
 import com.github.wikor2115.reservation.security.UserRole;
 import com.github.wikor2115.reservation.security.jwt.JwtProperties;
 import com.github.wikor2115.reservation.security.jwt.JwtTokenService;
@@ -123,6 +125,63 @@ class AuthServiceTest {
         when(userAccountRepository.findByEmailIgnoreCase("jan@example.com")).thenReturn(Optional.of(account));
 
         assertThrows(InvalidCredentialsException.class, () -> authService.login("jan@example.com", "customer123"));
+    }
+
+    @Test
+    void changePassword_whenCurrentPasswordMatches_updatesHashAndSavesAccount() {
+        UserAccount account = UserAccount.registerCustomer(
+                "jan@example.com",
+                "Jan",
+                passwordEncoder.encode("customer123"),
+                CLOCK);
+        setId(account, 10L);
+        String oldPasswordHash = account.getPasswordHash();
+        when(userAccountRepository.findById(10L)).thenReturn(Optional.of(account));
+
+        authService.changePassword(
+                new AuthenticatedUser(10L, "jan@example.com", UserRole.CUSTOMER),
+                "customer123",
+                "customer456");
+
+        assertNotEquals(oldPasswordHash, account.getPasswordHash());
+        assertTrue(passwordEncoder.matches("customer456", account.getPasswordHash()));
+        verify(userAccountRepository).save(account);
+    }
+
+    @Test
+    void changePassword_whenCurrentPasswordDoesNotMatch_throwsInvalidCredentialsException() {
+        UserAccount account = UserAccount.registerCustomer(
+                "jan@example.com",
+                "Jan",
+                passwordEncoder.encode("customer123"),
+                CLOCK);
+        setId(account, 10L);
+        when(userAccountRepository.findById(10L)).thenReturn(Optional.of(account));
+
+        assertThrows(InvalidCredentialsException.class, () -> authService.changePassword(
+                new AuthenticatedUser(10L, "jan@example.com", UserRole.CUSTOMER),
+                "wrong-password",
+                "customer456"));
+
+        verify(userAccountRepository, never()).save(any());
+    }
+
+    @Test
+    void changePassword_whenNewPasswordMatchesCurrentPassword_throwsIllegalArgumentException() {
+        UserAccount account = UserAccount.registerCustomer(
+                "jan@example.com",
+                "Jan",
+                passwordEncoder.encode("customer123"),
+                CLOCK);
+        setId(account, 10L);
+        when(userAccountRepository.findById(10L)).thenReturn(Optional.of(account));
+
+        assertThrows(IllegalArgumentException.class, () -> authService.changePassword(
+                new AuthenticatedUser(10L, "jan@example.com", UserRole.CUSTOMER),
+                "customer123",
+                "customer123"));
+
+        verify(userAccountRepository, never()).save(any());
     }
 
     private static void setId(UserAccount account, Long id) {

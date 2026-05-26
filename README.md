@@ -21,7 +21,7 @@ path plus JWT authentication for protected backend endpoints.
 - PostgreSQL dev profile with Flyway migrations
 - Docker Compose for local PostgreSQL
 - Spring Security with JWT bearer tokens for protected endpoints
-- Auth module with customer registration and login
+- Auth module with customer registration, login and password change
 - OpenAPI UI through Springdoc in the `dev` profile
 - React 19 + Vite + TypeScript frontend
 
@@ -275,6 +275,7 @@ Auth:
 ```text
 POST   /api/v1/auth/register
 POST   /api/v1/auth/login
+POST   /api/v1/auth/change-password
 ```
 
 Offer:
@@ -308,13 +309,15 @@ GET    /api/v1/admin/availability/{slotId}/reservations
 DELETE /api/v1/reservations/{reservationId}
 ```
 
-Auth endpoints issue JWTs. Admin endpoints require a bearer token with the
-`ADMIN` role, booking reservation endpoints require `CUSTOMER` or `ADMIN`, and
-public offer/availability read endpoints remain unauthenticated.
+Auth login issues JWTs. Password change requires a bearer token. Admin endpoints
+require a bearer token with the `ADMIN` role, booking reservation endpoints
+require `CUSTOMER` or `ADMIN`, and public offer/availability read endpoints
+remain unauthenticated. Customers can access only reservations matching the
+email from their token; admins can access all reservations.
 
 ## MVP Architecture
 
-The current backend should be treated as a modular Spring Boot MVP with three
+The current backend should be treated as a modular Spring Boot MVP with four
 separate runnable modules. Booking directly depends on the availability module
 and uses its JPA entity/repository to reserve and release slot capacity in one
 transaction.

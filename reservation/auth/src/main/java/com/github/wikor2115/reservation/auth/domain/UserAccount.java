@@ -92,6 +92,10 @@ public class UserAccount {
         status = UserAccountStatus.DISABLED;
     }
 
+    public void changePasswordHash(String passwordHash) {
+        this.passwordHash = requireText(passwordHash, "passwordHash");
+    }
+
     public boolean isActive() {
         return status == UserAccountStatus.ACTIVE;
     }

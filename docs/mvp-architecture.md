@@ -54,13 +54,16 @@ For a future microservice split:
 - Admin/customer split exists, but there is no external identity provider,
   refresh-token flow or token revocation yet.
 - H2 is still used for fast local/test runs.
-- PostgreSQL/Flyway exists for local development, but not yet in CI.
+- PostgreSQL/Flyway has a CI smoke job, but full repository tests still run on
+  H2.
 - OpenAPI is enabled only in dev profiles and not yet curated with descriptions.
 
 ## Recommended Next Hardening Order
 
-1. Run and verify the full PostgreSQL smoke flow outside the Codex sandbox.
+1. Watch the PostgreSQL smoke job on GitHub Actions and fix any environment-only
+   failures.
 2. Add OpenAPI descriptions and example requests.
-3. Add CI service containers or Testcontainers for PostgreSQL verification.
+3. Add focused Testcontainers repository/service tests where H2 differs from
+   PostgreSQL.
 4. Harden auth with refresh-token/revocation decisions if needed.
 5. Decide whether to keep modular MVP style or split into real services.

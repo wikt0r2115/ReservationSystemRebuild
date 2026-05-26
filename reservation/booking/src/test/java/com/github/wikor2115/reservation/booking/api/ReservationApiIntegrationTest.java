@@ -17,14 +17,18 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.github.wikor2115.reservation.availability.domain.AvailabilitySlot;
 import com.github.wikor2115.reservation.availability.repository.AvailabilitySlotRepository;
 import com.github.wikor2115.reservation.booking.domain.Reservation;
 import com.github.wikor2115.reservation.booking.repository.ReservationRepository;
+import com.github.wikor2115.reservation.security.AuthenticatedUser;
+import com.github.wikor2115.reservation.security.UserRole;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -63,6 +67,7 @@ class ReservationApiIntegrationTest {
         AvailabilitySlot slot = availabilitySlotRepository.save(sampleSlot());
 
         mockMvc.perform(post("/api/v1/reservations")
+                .with(customerAuth("jan@example.com"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
@@ -83,12 +88,15 @@ class ReservationApiIntegrationTest {
         Reservation reservation = reservationRepository.findAll().get(0);
         assertEquals(2, availabilitySlotRepository.findById(slot.getId()).orElseThrow().getReservedCount());
 
-        mockMvc.perform(get("/api/v1/reservations/{reservationId}", reservation.getId()))
+        mockMvc.perform(get("/api/v1/reservations/{reservationId}", reservation.getId())
+                .with(customerAuth("jan@example.com")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(reservation.getId()))
                 .andExpect(jsonPath("$.status").value("CONFIRMED"));
 
-        mockMvc.perform(get("/api/v1/reservations").param("customerEmail", "JAN@example.com"))
+        mockMvc.perform(get("/api/v1/reservations")
+                .with(customerAuth("jan@example.com"))
+                .param("customerEmail", "JAN@example.com"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].id").value(reservation.getId()));
@@ -99,6 +107,7 @@ class ReservationApiIntegrationTest {
                 .andExpect(jsonPath("$[0].availabilitySlotId").value(slot.getId()));
 
         mockMvc.perform(post("/api/v1/reservations")
+                .with(customerAuth("anna@example.com"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
@@ -112,7 +121,8 @@ class ReservationApiIntegrationTest {
                 .andExpect(jsonPath("$.code").value("BUSINESS_RULE_VIOLATION"))
                 .andExpect(jsonPath("$.message").value("Reservation would exceed capacity of 2"));
 
-        mockMvc.perform(delete("/api/v1/reservations/{reservationId}", reservation.getId()))
+        mockMvc.perform(delete("/api/v1/reservations/{reservationId}", reservation.getId())
+                .with(customerAuth("jan@example.com")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(reservation.getId()))
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
@@ -127,5 +137,14 @@ class ReservationApiIntegrationTest {
                 LocalDateTime.of(2099, 6, 2, 12, 0),
                 2,
                 CLOCK);
+    }
+
+    private static RequestPostProcessor customerAuth(String email) {
+        return request -> {
+            request.setUserPrincipal(new UsernamePasswordAuthenticationToken(
+                    new AuthenticatedUser(10L, email, UserRole.CUSTOMER),
+                    null));
+            return request;
+        };
     }
 }

@@ -89,3 +89,66 @@ jobs:
           name: service-jars
           path: reservation/*/target/*.jar
           if-no-files-found: error
+
+  postgres-smoke:
+    name: PostgreSQL smoke
+    runs-on: ubuntu-latest
+    needs: test
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: reservation
+          POSTGRES_USER: reservation
+          POSTGRES_PASSWORD: reservation
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reservation -d reservation"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: reservation
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: |
+            reservation/pom.xml
+            reservation/security-common/pom.xml
+            reservation/auth/pom.xml
+            reservation/offer/pom.xml
+            reservation/availability/pom.xml
+            reservation/booking/pom.xml
+
+      - name: Build service jars
+        run: mvn -B -DskipTests package
+
+      - name: Run PostgreSQL smoke
+        env:
+          DATABASE_URL: jdbc:postgresql://localhost:5432/reservation
+          DATABASE_USERNAME: reservation
+          DATABASE_PASSWORD: reservation
+          JWT_SECRET: ci-postgres-smoke-secret
+          JWT_ISSUER: reservation-auth
+          JWT_EXPIRATION: PT2H
+        run: bash ../.github/scripts/postgres-smoke.sh
+
+      - name: Upload smoke logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-smoke-logs
+          path: .ci-postgres-smoke
+          if-no-files-found: ignore

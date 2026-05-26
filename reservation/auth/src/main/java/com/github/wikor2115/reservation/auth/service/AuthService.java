@@ -92,6 +92,26 @@ public class AuthService {
         return AuthTokenResponse.bearer(token, jwtProperties.expiration().toSeconds());
     }
 
+    public void changePassword(AuthenticatedUser user, String currentPassword, String newPassword) {
+        Objects.requireNonNull(user, "user must not be null");
+        String rawCurrentPassword = requireText(currentPassword, "currentPassword");
+        String rawNewPassword = requireText(newPassword, "newPassword");
+        UserAccount account = userAccountRepository.findById(user.id())
+                .orElseThrow(InvalidCredentialsException::new);
+
+        if (!account.isActive()
+                || !account.getEmail().equalsIgnoreCase(user.email())
+                || !passwordEncoder.matches(rawCurrentPassword, account.getPasswordHash())) {
+            throw new InvalidCredentialsException();
+        }
+        if (passwordEncoder.matches(rawNewPassword, account.getPasswordHash())) {
+            throw new IllegalArgumentException("newPassword must be different from currentPassword");
+        }
+
+        account.changePasswordHash(passwordEncoder.encode(rawNewPassword));
+        userAccountRepository.save(account);
+    }
+
     private UserAccount saveNewAccount(UserAccount account) {
         try {
             return userAccountRepository.save(account);

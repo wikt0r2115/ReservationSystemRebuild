@@ -15,11 +15,13 @@ Rules:
 Public GET /offers and /offers/{offerId}/availability: no authentication.
 Admin endpoints under /admin/**: ADMIN role.
 Reservation endpoints under /reservations/**: CUSTOMER or ADMIN role.
+CUSTOMER users can access only reservations matching the email in their token.
+ADMIN users can access all reservations.
 ```
 
-The auth module exposes customer registration and login endpoints. Login returns
-a JWT bearer token. In the `dev` and `dev-postgres` profiles, the auth module
-seeds an admin account by default:
+The auth module exposes customer registration, login and password change
+endpoints. Login returns a JWT bearer token. In the `dev` and `dev-postgres`
+profiles, the auth module seeds an admin account by default:
 
 ```text
 admin@example.com / admin123
@@ -50,9 +52,12 @@ INVALID_REQUEST_BODY
 BUSINESS_RULE_VIOLATION
 AUTHENTICATION_FAILED
 USER_ACCOUNT_ALREADY_EXISTS
+INVALID_BEARER_TOKEN
+ACCESS_DENIED
 OFFER_NOT_FOUND
 AVAILABILITY_SLOT_NOT_FOUND
 RESERVATION_NOT_FOUND
+RESERVATION_ACCESS_DENIED
 ```
 
 ## Auth API
@@ -89,6 +94,20 @@ Successful login response:
   "expiresInSeconds": 7200
 }
 ```
+
+Change password:
+
+```bash
+curl -X POST http://localhost:8083/api/v1/auth/change-password \
+  -H "Authorization: Bearer $CUSTOMER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "currentPassword": "customer123",
+    "newPassword": "customer456"
+  }'
+```
+
+Successful password change returns `204 No Content`.
 
 ## Offer API
 
