@@ -22,6 +22,9 @@ import com.github.wikor2115.reservation.availability.repository.AvailabilitySlot
 @ActiveProfiles("test")
 class AvailabilityApiIntegrationTest {
 
+    private static final String DUPLICATE_SLOT_MESSAGE =
+            "Availability slot already exists for this offer and time range";
+
     @Autowired
     private AvailabilityController availabilityController;
 
@@ -89,5 +92,30 @@ class AvailabilityApiIntegrationTest {
         mockMvc.perform(get("/api/v1/offers/{offerId}/availability", offerId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void createSlot_whenDuplicate_returnsConflict() throws Exception {
+        long offerId = 1L;
+
+        String payload = """
+                {
+                  "startsAt": "2099-06-02T10:00:00",
+                  "endsAt": "2099-06-02T12:00:00",
+                  "capacity": 10
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/admin/offers/{offerId}/availability", offerId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/v1/admin/offers/{offerId}/availability", offerId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("AVAILABILITY_SLOT_ALREADY_EXISTS"))
+                .andExpect(jsonPath("$.message").value(DUPLICATE_SLOT_MESSAGE));
     }
 }

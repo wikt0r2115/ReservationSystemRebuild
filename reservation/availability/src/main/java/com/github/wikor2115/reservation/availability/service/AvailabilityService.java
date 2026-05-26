@@ -21,6 +21,7 @@ public class AvailabilityService {
     @Transactional
     public AvailabilitySlot createSlot(Long offerId, LocalDateTime startsAt, LocalDateTime endsAt, int capacity) {
         AvailabilitySlot slot = AvailabilitySlot.create(offerId, startsAt, endsAt, capacity);
+        ensureSlotIsUnique(slot.getOfferId(), slot.getStartsAt(), slot.getEndsAt());
         return slotRepository.save(slot);
     }
 
@@ -42,6 +43,7 @@ public class AvailabilityService {
             LocalDateTime newStartsAt = startsAt != null ? startsAt : slot.getStartsAt();
             LocalDateTime newEndsAt = endsAt != null ? endsAt : slot.getEndsAt();
             slot.changeTime(newStartsAt, newEndsAt);
+            ensureSlotIsUnique(slot.getOfferId(), newStartsAt, newEndsAt, slotId);
         }
         if (capacity != null)
             slot.changeCapacity(capacity);
@@ -58,5 +60,15 @@ public class AvailabilityService {
     private AvailabilitySlot findSlotOrThrow(Long slotId) {
         return slotRepository.findById(slotId)
                 .orElseThrow(() -> new AvailabilitySlotNotFoundException(slotId));
+    }
+
+    private void ensureSlotIsUnique(Long offerId, LocalDateTime startsAt, LocalDateTime endsAt) {
+        if (slotRepository.existsByOfferIdAndStartsAtAndEndsAt(offerId, startsAt, endsAt))
+            throw new DuplicateAvailabilitySlotException();
+    }
+
+    private void ensureSlotIsUnique(Long offerId, LocalDateTime startsAt, LocalDateTime endsAt, Long slotId) {
+        if (slotRepository.existsByOfferIdAndStartsAtAndEndsAtAndIdNot(offerId, startsAt, endsAt, slotId))
+            throw new DuplicateAvailabilitySlotException();
     }
 }

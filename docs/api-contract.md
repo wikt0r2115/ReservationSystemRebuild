@@ -134,6 +134,13 @@ Admin cancel slot:
 curl -u admin:admin123 -X DELETE http://localhost:8081/api/v1/admin/availability/1
 ```
 
+## Availability Business Rules
+
+- An offer cannot have multiple availability slots with the same start and end
+  time. Use `capacity` to represent multiple seats.
+- Duplicate availability slot creation or update returns `409 Conflict` with
+  `AVAILABILITY_SLOT_ALREADY_EXISTS`.
+
 ## Booking API
 
 Create reservation:

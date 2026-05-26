@@ -63,6 +63,18 @@ class AvailabilityServiceTest {
     }
 
     @Test
+    void createSlot_whenDuplicateExists_throwsDuplicateAvailabilitySlotException() {
+        when(slotRepository.existsByOfferIdAndStartsAtAndEndsAt(OFFER_ID, STARTS_AT, ENDS_AT)).thenReturn(true);
+
+        DuplicateAvailabilitySlotException exception = assertThrows(
+                DuplicateAvailabilitySlotException.class,
+                () -> availabilityService.createSlot(OFFER_ID, STARTS_AT, ENDS_AT, CAPACITY));
+
+        assertEquals("Availability slot already exists for this offer and time range", exception.getMessage());
+        verify(slotRepository, never()).save(any());
+    }
+
+    @Test
     void findOpenSlotsByOfferId_returnsRepositoryResult() {
         AvailabilitySlot slot = sampleSlot();
         when(slotRepository.findByOfferIdAndStatusOrderByStartsAtAsc(OFFER_ID, AvailabilityStatus.OPEN))
@@ -143,6 +155,23 @@ class AvailabilityServiceTest {
         assertEquals(newEndsAt, result.getEndsAt());
         assertEquals(CAPACITY, result.getCapacity());
         verify(slotRepository).save(slot);
+    }
+
+    @Test
+    void updateSlotById_whenDuplicateExists_throwsDuplicateAvailabilitySlotException() {
+        AvailabilitySlot slot = sampleSlot();
+        LocalDateTime newStartsAt = LocalDateTime.of(2026, 6, 3, 10, 0);
+        LocalDateTime newEndsAt = LocalDateTime.of(2026, 6, 3, 12, 0);
+        when(slotRepository.findById(SLOT_ID)).thenReturn(Optional.of(slot));
+        when(slotRepository.existsByOfferIdAndStartsAtAndEndsAtAndIdNot(OFFER_ID, newStartsAt, newEndsAt, SLOT_ID))
+                .thenReturn(true);
+
+        DuplicateAvailabilitySlotException exception = assertThrows(
+                DuplicateAvailabilitySlotException.class,
+                () -> availabilityService.updateSlotById(SLOT_ID, newStartsAt, newEndsAt, null));
+
+        assertEquals("Availability slot already exists for this offer and time range", exception.getMessage());
+        verify(slotRepository, never()).save(any());
     }
 
     @Test

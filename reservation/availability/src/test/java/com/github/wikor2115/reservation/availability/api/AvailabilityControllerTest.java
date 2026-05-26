@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import com.github.wikor2115.reservation.availability.domain.AvailabilitySlot;
 import com.github.wikor2115.reservation.availability.service.AvailabilityService;
 import com.github.wikor2115.reservation.availability.service.AvailabilitySlotNotFoundException;
+import com.github.wikor2115.reservation.availability.service.DuplicateAvailabilitySlotException;
 
 class AvailabilityControllerTest {
 
@@ -95,6 +96,25 @@ class AvailabilityControllerTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.message", not(emptyOrNullString())))
                 .andExpect(jsonPath("$.details[*].field", hasItems("startsAt", "endsAt", "capacity")));
+    }
+
+    @Test
+    void createSlot_whenDuplicate_returnsConflict() throws Exception {
+        availabilityService.createException = new DuplicateAvailabilitySlotException();
+
+        mockMvc.perform(post("/api/v1/admin/offers/{offerId}/availability", OFFER_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "startsAt": "2026-06-02T10:00:00",
+                          "endsAt": "2026-06-02T12:00:00",
+                          "capacity": 10
+                        }
+                        """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("AVAILABILITY_SLOT_ALREADY_EXISTS"))
+                .andExpect(jsonPath("$.message").value("Availability slot already exists for this offer and time range"))
+                .andExpect(jsonPath("$.details[0].field").value("timeRange"));
     }
 
     @Test
@@ -201,6 +221,7 @@ class AvailabilityControllerTest {
 
     private static final class StubAvailabilityService extends AvailabilityService {
         private List<AvailabilitySlot> openSlots = List.of(sampleSlot(SLOT_ID, OFFER_ID, STARTS_AT, ENDS_AT, 10));
+        private RuntimeException createException;
         private RuntimeException updateException;
         private RuntimeException cancelException;
 
@@ -215,6 +236,9 @@ class AvailabilityControllerTest {
 
         @Override
         public AvailabilitySlot createSlot(Long offerId, LocalDateTime startsAt, LocalDateTime endsAt, int capacity) {
+            if (createException != null) {
+                throw createException;
+            }
             return sampleSlot(SLOT_ID, offerId, startsAt, endsAt, capacity);
         }
 

@@ -9,11 +9,20 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
 @Entity
+@Table(
+        name = "availability_slot",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_availability_slot_offer_time",
+                columnNames = { "offer_id", "starts_at", "ends_at" }
+        )
+)
 public class AvailabilitySlot {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

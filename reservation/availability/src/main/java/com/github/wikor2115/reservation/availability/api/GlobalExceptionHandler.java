@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.github.wikor2115.reservation.availability.service.AvailabilitySlotNotFoundException;
+import com.github.wikor2115.reservation.availability.service.DuplicateAvailabilitySlotException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -24,6 +25,18 @@ public class GlobalExceptionHandler {
                         "AVAILABILITY_SLOT_NOT_FOUND",
                         exception.getMessage(),
                         List.of(new ApiFieldError("slotId", exception.getMessage()))
+                ));
+    }
+
+    @ExceptionHandler(DuplicateAvailabilitySlotException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateAvailabilitySlot(
+            DuplicateAvailabilitySlotException exception
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        "AVAILABILITY_SLOT_ALREADY_EXISTS",
+                        exception.getMessage(),
+                        List.of(new ApiFieldError("timeRange", exception.getMessage()))
                 ));
     }
 
