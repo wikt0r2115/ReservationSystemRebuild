@@ -220,9 +220,30 @@ h3 {
 }
 
 .reservation-form,
-.admin-auth {
+.admin-auth,
+.auth-box {
   display: grid;
   gap: 10px;
+}
+
+.auth-box {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.auth-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.button-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 label {

@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -59,6 +60,16 @@ public class GlobalExceptionHandler {
                         "INVALID_REQUEST_BODY",
                         "Request body is not readable",
                         List.of(new ApiFieldError("body", "Malformed JSON or invalid field type"))
+                ));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(AccessDeniedException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiErrorResponse(
+                        "RESERVATION_ACCESS_DENIED",
+                        exception.getMessage(),
+                        List.of(new ApiFieldError("customerEmail", exception.getMessage()))
                 ));
     }
 

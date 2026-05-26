@@ -1,27 +1,27 @@
 import { apiConfig } from '../config';
-import type { CreateReservationPayload, Credentials, Reservation } from '../types';
+import type { CreateReservationPayload, Reservation } from '../types';
 import { requestJson } from './client';
 
 export function createReservation(
   payload: CreateReservationPayload,
-  credentials: Credentials,
+  accessToken: string,
 ): Promise<Reservation> {
   return requestJson<Reservation>(`${apiConfig.bookingBaseUrl}/api/v1/reservations`, {
     method: 'POST',
     body: payload,
-    credentials,
+    accessToken,
   });
 }
 
-export function cancelReservation(reservationId: number, credentials: Credentials): Promise<Reservation> {
+export function cancelReservation(reservationId: number, accessToken: string): Promise<Reservation> {
   return requestJson<Reservation>(`${apiConfig.bookingBaseUrl}/api/v1/reservations/${reservationId}`, {
     method: 'DELETE',
-    credentials,
+    accessToken,
   });
 }
 
-export function listAdminReservations(credentials: Credentials): Promise<Reservation[]> {
+export function listAdminReservations(accessToken: string): Promise<Reservation[]> {
   return requestJson<Reservation[]>(`${apiConfig.bookingBaseUrl}/api/v1/admin/reservations`, {
-    credentials,
+    accessToken,
   });
 }
