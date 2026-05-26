@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,6 +31,11 @@ class ReservationRepositoryTest {
 
     @Autowired
     private ReservationRepository reservationRepository;
+
+    @BeforeEach
+    void setUp() {
+        reservationRepository.deleteAll();
+    }
 
     @Test
     void save_persistsReservation() {
