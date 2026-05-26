@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS auth_user (
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(50) NOT NULL,
     status VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     CONSTRAINT uq_auth_user_email UNIQUE (email),
     CONSTRAINT chk_auth_user_email_not_blank CHECK (length(trim(email)) > 0),
     CONSTRAINT chk_auth_user_display_name_not_blank CHECK (length(trim(display_name)) > 0),

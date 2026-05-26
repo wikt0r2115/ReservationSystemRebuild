@@ -1,13 +1,13 @@
 # Reservation System
 
 Spring Boot backend and React frontend for a reservation system. The current
-MVP contains three tested backend modules: offers, availability slots and
+MVP contains tested backend modules for auth, offers, availability slots and
 reservations. The frontend provides a small operations console for creating
 offers/slots, making reservations and reviewing admin data.
 
 The project is intentionally still a portfolio MVP. It keeps H2 for fast
 local/test runs, and also has a PostgreSQL/Flyway/Docker Compose development
-path plus simple HTTP Basic authentication for customer/admin flows.
+path plus HTTP Basic module guards and a JWT auth module foundation.
 
 ## Current Status
 
@@ -20,7 +20,8 @@ path plus simple HTTP Basic authentication for customer/admin flows.
 - H2 for current local/dev/test setup
 - PostgreSQL dev profile with Flyway migrations
 - Docker Compose for local PostgreSQL
-- Spring Security HTTP Basic for customer/admin separation
+- Spring Security HTTP Basic for current module guards
+- JWT auth module with customer registration and login
 - OpenAPI UI through Springdoc in the `dev` profile
 - React 19 + Vite + TypeScript frontend
 
@@ -236,6 +237,13 @@ For the full endpoint list and examples, see
 
 ## Current API Summary
 
+Auth:
+
+```text
+POST   /api/v1/auth/register
+POST   /api/v1/auth/login
+```
+
 Offer:
 
 ```text
@@ -267,9 +275,10 @@ GET    /api/v1/admin/availability/{slotId}/reservations
 DELETE /api/v1/reservations/{reservationId}
 ```
 
-Admin endpoints require HTTP Basic credentials with the `ADMIN` role. Booking
-reservation endpoints require the `CUSTOMER` or `ADMIN` role. Public offer and
-availability read endpoints remain unauthenticated.
+Auth endpoints issue JWTs for the auth module. Existing offer, availability and
+booking modules still use HTTP Basic credentials: admin endpoints require the
+`ADMIN` role, booking reservation endpoints require the `CUSTOMER` or `ADMIN`
+role, and public offer/availability read endpoints remain unauthenticated.
 
 ## MVP Architecture
 

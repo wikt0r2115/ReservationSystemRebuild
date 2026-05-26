@@ -10,8 +10,31 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.github.wikor2115.reservation.auth.service.DuplicateUserAccountException;
+import com.github.wikor2115.reservation.auth.service.InvalidCredentialsException;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(DuplicateUserAccountException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateUserAccount(DuplicateUserAccountException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        "USER_ACCOUNT_ALREADY_EXISTS",
+                        exception.getMessage(),
+                        List.of(new ApiFieldError("email", exception.getMessage()))
+                ));
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(InvalidCredentialsException exception) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiErrorResponse(
+                        "AUTHENTICATION_FAILED",
+                        exception.getMessage(),
+                        List.of(new ApiFieldError("credentials", exception.getMessage()))
+                ));
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidation(MethodArgumentNotValidException exception) {

@@ -2,7 +2,7 @@
 
 Base path: `/api/v1`.
 
-The current MVP uses HTTP Basic authentication:
+The current offer, availability and booking modules use HTTP Basic authentication:
 
 ```text
 admin:    admin / admin123
@@ -16,6 +16,10 @@ Public GET /offers and /offers/{offerId}/availability: no authentication.
 Admin endpoints under /admin/**: ADMIN role.
 Reservation endpoints under /reservations/**: CUSTOMER or ADMIN role.
 ```
+
+The auth module exposes customer registration and login endpoints. Login returns
+a JWT bearer token for future module integration; existing modules still use
+HTTP Basic until their security filters are migrated.
 
 ## Error Shape
 
@@ -40,9 +44,46 @@ Common codes:
 VALIDATION_ERROR
 INVALID_REQUEST_BODY
 BUSINESS_RULE_VIOLATION
+AUTHENTICATION_FAILED
+USER_ACCOUNT_ALREADY_EXISTS
 OFFER_NOT_FOUND
 AVAILABILITY_SLOT_NOT_FOUND
 RESERVATION_NOT_FOUND
+```
+
+## Auth API
+
+Register customer:
+
+```bash
+curl -X POST http://localhost:8083/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "displayName": "Jan Kowalski",
+    "email": "jan@example.com",
+    "password": "customer123"
+  }'
+```
+
+Login:
+
+```bash
+curl -X POST http://localhost:8083/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "jan@example.com",
+    "password": "customer123"
+  }'
+```
+
+Successful login response:
+
+```json
+{
+  "token": "<jwt>",
+  "tokenType": "Bearer",
+  "expiresInSeconds": 7200
+}
 ```
 
 ## Offer API

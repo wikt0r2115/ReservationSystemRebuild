@@ -5,9 +5,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+
+import com.github.wikor2115.reservation.auth.repository.UserAccountRepository;
 
 @Configuration
 public class SecurityConfig {
@@ -33,9 +38,18 @@ public class SecurityConfig {
     }
 
     @Bean
-    UserDetailsService userDetailsService() {
-        return username -> {
-            throw new UsernameNotFoundException("User account " + username + " not found");
-        };
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    UserDetailsService userDetailsService(UserAccountRepository userAccountRepository) {
+        return username -> userAccountRepository.findByEmailIgnoreCase(username)
+                .map(account -> User.withUsername(account.getEmail())
+                        .password(account.getPasswordHash())
+                        .roles(account.getRole().name())
+                        .disabled(!account.isActive())
+                        .build())
+                .orElseThrow(() -> new UsernameNotFoundException("User account " + username + " not found"));
     }
 }
