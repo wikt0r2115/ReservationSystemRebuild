@@ -49,8 +49,8 @@ reservation backend.
   - reservation in the past;
   - invalid status transition.
 
-Authentication can be deferred until V2. If added, keep it simple and explicit:
-admin/customer roles with Spring Security and JWT or HTTP Basic for local demo.
+Authentication is implemented with admin/customer roles in Spring Security and
+JWT bearer tokens for protected endpoints.
 
 ## Final Architecture
 

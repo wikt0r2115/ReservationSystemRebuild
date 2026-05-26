@@ -44,6 +44,33 @@ export type ApiErrorResponse = {
   details?: ApiFieldError[];
 };
 
+export type UserRole = 'CUSTOMER' | 'ADMIN';
+
+export type UserAccountStatus = 'ACTIVE' | 'DISABLED';
+
+export type LoginCredentials = {
+  email: string;
+  password: string;
+};
+
+export type RegisterCustomerPayload = LoginCredentials & {
+  displayName: string;
+};
+
+export type AuthTokenResponse = {
+  token: string;
+  tokenType: string;
+  expiresInSeconds: number;
+};
+
+export type UserAccountResponse = {
+  id: number;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  status: UserAccountStatus;
+};
+
 export type CreateReservationPayload = {
   availabilitySlotId: number;
   customerName: string;
@@ -62,9 +89,4 @@ export type CreateAvailabilitySlotPayload = {
   startsAt: string;
   endsAt: string;
   capacity: number;
-};
-
-export type Credentials = {
-  username: string;
-  password: string;
 };

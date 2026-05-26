@@ -4,8 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import java.time.Duration;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,11 +18,19 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import com.github.wikor2115.reservation.availability.repository.AvailabilitySlotRepository;
+import com.github.wikor2115.reservation.security.AuthenticatedUser;
+import com.github.wikor2115.reservation.security.UserRole;
+import com.github.wikor2115.reservation.security.jwt.JwtProperties;
+import com.github.wikor2115.reservation.security.jwt.JwtTokenService;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class AvailabilitySecurityIntegrationTest {
+    private static final JwtTokenService TOKEN_SERVICE = new JwtTokenService(new JwtProperties(
+            "test-secret",
+            "reservation-auth-test",
+            Duration.ofHours(1)));
 
     @Autowired
     private MockMvc mockMvc;
@@ -50,13 +57,13 @@ class AvailabilitySecurityIntegrationTest {
 
     @Test
     void adminCreateSlot_withCustomerRole_returnsForbidden() throws Exception {
-        mockMvc.perform(withBasicAuth(validCreateSlotRequest(), "customer", "customer123"))
+        mockMvc.perform(withBearerToken(validCreateSlotRequest(), UserRole.CUSTOMER))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void adminCreateSlot_withAdminRole_reachesController() throws Exception {
-        mockMvc.perform(withBasicAuth(validCreateSlotRequest(), "admin", "admin123"))
+        mockMvc.perform(withBearerToken(validCreateSlotRequest(), UserRole.ADMIN))
                 .andExpect(status().isCreated());
     }
 
@@ -72,13 +79,11 @@ class AvailabilitySecurityIntegrationTest {
                         """);
     }
 
-    private static MockHttpServletRequestBuilder withBasicAuth(
+    private static MockHttpServletRequestBuilder withBearerToken(
             MockHttpServletRequestBuilder request,
-            String username,
-            String password
+            UserRole role
     ) {
-        String token = Base64.getEncoder()
-                .encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
-        return request.header(HttpHeaders.AUTHORIZATION, "Basic " + token);
+        String token = TOKEN_SERVICE.createToken(new AuthenticatedUser(1L, role.name().toLowerCase() + "@example.com", role));
+        return request.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
     }
 }

@@ -18,6 +18,7 @@ import {
   listAdminSlots,
   listOpenSlots,
 } from './api/availability';
+import { login, registerCustomer } from './api/auth';
 import { ApiRequestError } from './api/client';
 import { createOffer, listActiveOffers, listAdminOffers } from './api/offers';
 import { cancelReservation, createReservation, listAdminReservations } from './api/reservations';
@@ -28,10 +29,14 @@ import type {
   CreateAvailabilitySlotPayload,
   CreateOfferPayload,
   CreateReservationPayload,
-  Credentials,
+  LoginCredentials,
   Offer,
   Reservation,
 } from './types';
+
+type CustomerAuthFormState = LoginCredentials & {
+  displayName: string;
+};
 
 type ReservationFormState = {
   customerName: string;
@@ -79,13 +84,22 @@ export function App() {
   const [adminOffers, setAdminOffers] = useState<Offer[]>([]);
   const [adminSlots, setAdminSlots] = useState<AvailabilitySlot[]>([]);
   const [selectedAdminOfferId, setSelectedAdminOfferId] = useState<number | null>(null);
-  const [adminCredentials, setAdminCredentials] = useState<Credentials>({
-    username: 'admin',
-    password: 'admin123',
+  const [customerAuthForm, setCustomerAuthForm] = useState<CustomerAuthFormState>({
+    displayName: 'Jan Kowalski',
+    email: apiConfig.customerEmail,
+    password: apiConfig.customerPassword,
   });
+  const [customerToken, setCustomerToken] = useState<string | null>(null);
+  const [adminCredentials, setAdminCredentials] = useState<LoginCredentials>({
+    email: apiConfig.adminEmail,
+    password: apiConfig.adminPassword,
+  });
+  const [adminToken, setAdminToken] = useState<string | null>(null);
   const [isLoadingOffers, setIsLoadingOffers] = useState(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [isCustomerAuthLoading, setIsCustomerAuthLoading] = useState(false);
   const [isSubmittingReservation, setIsSubmittingReservation] = useState(false);
+  const [isAdminAuthLoading, setIsAdminAuthLoading] = useState(false);
   const [isLoadingAdmin, setIsLoadingAdmin] = useState(false);
   const [isLoadingAdminSlots, setIsLoadingAdminSlots] = useState(false);
   const [isCreatingOffer, setIsCreatingOffer] = useState(false);
@@ -162,6 +176,58 @@ export function App() {
     }
   }
 
+  async function registerCustomerAccount() {
+    setIsCustomerAuthLoading(true);
+    setError(null);
+    try {
+      await registerCustomer(customerAuthForm);
+      await createCustomerSession();
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setIsCustomerAuthLoading(false);
+    }
+  }
+
+  async function loginCustomerAccount() {
+    setIsCustomerAuthLoading(true);
+    setError(null);
+    try {
+      await createCustomerSession();
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setIsCustomerAuthLoading(false);
+    }
+  }
+
+  async function createCustomerSession() {
+    const token = await login({
+      email: customerAuthForm.email,
+      password: customerAuthForm.password,
+    });
+    setCustomerToken(token.token);
+    setReservationForm((current) => ({
+      ...current,
+      customerName: current.customerName || customerAuthForm.displayName,
+      customerEmail: current.customerEmail || customerAuthForm.email,
+    }));
+  }
+
+  async function loginAdminAndLoad() {
+    setIsAdminAuthLoading(true);
+    setError(null);
+    try {
+      const token = await login(adminCredentials);
+      setAdminToken(token.token);
+      await loadAdminData(token.token);
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setIsAdminAuthLoading(false);
+    }
+  }
+
   async function submitReservation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedSlot) {
@@ -170,6 +236,15 @@ export function App() {
         message: 'Availability slot is required',
         details: [],
       });
+      return;
+    }
+
+    const accessToken = requireAccessToken(
+      customerToken,
+      'CUSTOMER_LOGIN_REQUIRED',
+      'Customer login is required',
+    );
+    if (!accessToken) {
       return;
     }
 
@@ -183,10 +258,7 @@ export function App() {
     setIsSubmittingReservation(true);
     setError(null);
     try {
-      const reservation = await createReservation(payload, {
-        username: apiConfig.customerUsername,
-        password: apiConfig.customerPassword,
-      });
+      const reservation = await createReservation(payload, accessToken);
       setLastReservation(reservation);
       setReservationForm(emptyReservationForm);
       if (selectedOfferId !== null) {
@@ -204,12 +276,18 @@ export function App() {
       return;
     }
 
+    const accessToken = requireAccessToken(
+      customerToken,
+      'CUSTOMER_LOGIN_REQUIRED',
+      'Customer login is required',
+    );
+    if (!accessToken) {
+      return;
+    }
+
     setError(null);
     try {
-      const reservation = await cancelReservation(lastReservation.id, {
-        username: apiConfig.customerUsername,
-        password: apiConfig.customerPassword,
-      });
+      const reservation = await cancelReservation(lastReservation.id, accessToken);
       setLastReservation(reservation);
       if (selectedOfferId !== null) {
         await loadSlots(selectedOfferId);
@@ -219,13 +297,18 @@ export function App() {
     }
   }
 
-  async function loadAdminData() {
+  async function loadAdminData(token = adminToken) {
+    const accessToken = requireAccessToken(token, 'ADMIN_LOGIN_REQUIRED', 'Admin login is required');
+    if (!accessToken) {
+      return;
+    }
+
     setIsLoadingAdmin(true);
     setError(null);
     try {
       const [reservations, allOffers] = await Promise.all([
-        listAdminReservations(adminCredentials),
-        listAdminOffers(adminCredentials),
+        listAdminReservations(accessToken),
+        listAdminOffers(accessToken),
       ]);
       setAdminReservations(reservations);
       setAdminOffers(allOffers);
@@ -240,11 +323,16 @@ export function App() {
     }
   }
 
-  async function loadAdminSlots(offerId: number) {
+  async function loadAdminSlots(offerId: number, token = adminToken) {
+    const accessToken = requireAccessToken(token, 'ADMIN_LOGIN_REQUIRED', 'Admin login is required');
+    if (!accessToken) {
+      return;
+    }
+
     setIsLoadingAdminSlots(true);
     setError(null);
     try {
-      const loadedSlots = await listAdminSlots(offerId, adminCredentials);
+      const loadedSlots = await listAdminSlots(offerId, accessToken);
       setAdminSlots(loadedSlots);
     } catch (caught) {
       setError(toApiError(caught));
@@ -254,10 +342,15 @@ export function App() {
   }
 
   async function cancelAdminSlot(slot: AvailabilitySlot) {
+    const accessToken = requireAccessToken(adminToken, 'ADMIN_LOGIN_REQUIRED', 'Admin login is required');
+    if (!accessToken) {
+      return;
+    }
+
     setCancellingSlotId(slot.id);
     setError(null);
     try {
-      const cancelledSlot = await cancelAvailabilitySlot(slot.id, adminCredentials);
+      const cancelledSlot = await cancelAvailabilitySlot(slot.id, accessToken);
       setAdminSlots((current) => current.map((item) => (item.id === cancelledSlot.id ? cancelledSlot : item)));
       if (selectedOfferId === slot.offerId) {
         await loadSlots(slot.offerId);
@@ -272,6 +365,11 @@ export function App() {
   async function submitAdminOffer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    const accessToken = requireAccessToken(adminToken, 'ADMIN_LOGIN_REQUIRED', 'Admin login is required');
+    if (!accessToken) {
+      return;
+    }
+
     const payload: CreateOfferPayload = {
       name: offerForm.name,
       imageUrl: offerForm.imageUrl,
@@ -282,7 +380,7 @@ export function App() {
     setIsCreatingOffer(true);
     setError(null);
     try {
-      const offer = await createOffer(payload, adminCredentials);
+      const offer = await createOffer(payload, accessToken);
       setOfferForm(emptyOfferForm);
       setAdminOffers((current) => [offer, ...current.filter((item) => item.id !== offer.id)]);
       setOffers((current) => [offer, ...current.filter((item) => item.id !== offer.id)]);
@@ -299,6 +397,11 @@ export function App() {
 
   async function submitAdminSlot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const accessToken = requireAccessToken(adminToken, 'ADMIN_LOGIN_REQUIRED', 'Admin login is required');
+    if (!accessToken) {
+      return;
+    }
 
     const offerId = Number(slotForm.offerId);
     if (!Number.isFinite(offerId) || offerId <= 0) {
@@ -319,12 +422,12 @@ export function App() {
     setIsCreatingSlot(true);
     setError(null);
     try {
-      const slot = await createAvailabilitySlot(offerId, payload, adminCredentials);
+      const slot = await createAvailabilitySlot(offerId, payload, accessToken);
       setSelectedOfferId(offerId);
       setSlotForm({ ...createDefaultSlotForm(), offerId: String(offerId) });
       await loadSlots(offerId);
       if (selectedAdminOfferId === offerId) {
-        await loadAdminSlots(offerId);
+        await loadAdminSlots(offerId, accessToken);
       }
       setSelectedSlotId(slot.id);
     } catch (caught) {
@@ -332,6 +435,19 @@ export function App() {
     } finally {
       setIsCreatingSlot(false);
     }
+  }
+
+  function requireAccessToken(accessToken: string | null, code: string, message: string): string | null {
+    if (accessToken) {
+      return accessToken;
+    }
+
+    setError({
+      code,
+      message,
+      details: [],
+    });
+    return null;
   }
 
   return (
@@ -408,6 +524,66 @@ export function App() {
             title="Booking"
             meta={selectedSlot ? `Slot ${selectedSlot.id}` : 'No slot'}
           />
+          <div className="auth-box">
+            <div className="auth-status">
+              <UserRound size={16} aria-hidden="true" />
+              <span>{customerToken ? 'Customer token active' : 'Customer login required'}</span>
+            </div>
+            <label>
+              Display name
+              <input
+                type="text"
+                value={customerAuthForm.displayName}
+                onChange={(event) =>
+                  setCustomerAuthForm((current) => ({ ...current, displayName: event.target.value }))
+                }
+                autoComplete="name"
+                maxLength={100}
+              />
+            </label>
+            <label>
+              Email
+              <input
+                type="email"
+                value={customerAuthForm.email}
+                onChange={(event) =>
+                  setCustomerAuthForm((current) => ({ ...current, email: event.target.value }))
+                }
+                autoComplete="email"
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                value={customerAuthForm.password}
+                onChange={(event) =>
+                  setCustomerAuthForm((current) => ({ ...current, password: event.target.value }))
+                }
+                autoComplete="current-password"
+              />
+            </label>
+            <div className="button-row">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void registerCustomerAccount()}
+                disabled={isCustomerAuthLoading}
+              >
+                <UserRound size={18} aria-hidden="true" />
+                Register
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void loginCustomerAccount()}
+                disabled={isCustomerAuthLoading}
+              >
+                <TicketCheck size={18} aria-hidden="true" />
+                Login
+              </button>
+            </div>
+          </div>
           <form className="reservation-form" onSubmit={submitReservation}>
             <label>
               Name
@@ -451,7 +627,7 @@ export function App() {
             <button
               className="primary-button"
               type="submit"
-              disabled={isSubmittingReservation || !selectedSlot || selectedSlotRemaining <= 0}
+              disabled={isSubmittingReservation || !customerToken || !selectedSlot || selectedSlotRemaining <= 0}
             >
               <TicketCheck size={18} aria-hidden="true" />
               Reserve
@@ -482,7 +658,7 @@ export function App() {
                 className="secondary-button danger"
                 type="button"
                 onClick={cancelLastReservation}
-                disabled={lastReservation.status === 'CANCELLED'}
+                disabled={!customerToken || lastReservation.status === 'CANCELLED'}
               >
                 <XCircle size={18} aria-hidden="true" />
                 Cancel
@@ -498,13 +674,17 @@ export function App() {
             meta={`${adminReservations.length} reservations`}
           />
           <div className="admin-auth">
+            <div className="auth-status">
+              <ShieldCheck size={16} aria-hidden="true" />
+              <span>{adminToken ? 'Admin token active' : 'Admin login required'}</span>
+            </div>
             <label>
-              User
+              Email
               <input
-                type="text"
-                value={adminCredentials.username}
+                type="email"
+                value={adminCredentials.email}
                 onChange={(event) =>
-                  setAdminCredentials((current) => ({ ...current, username: event.target.value }))
+                  setAdminCredentials((current) => ({ ...current, email: event.target.value }))
                 }
                 autoComplete="username"
               />
@@ -520,9 +700,14 @@ export function App() {
                 autoComplete="current-password"
               />
             </label>
-            <button className="secondary-button" type="button" onClick={loadAdminData} disabled={isLoadingAdmin}>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => void loginAdminAndLoad()}
+              disabled={isAdminAuthLoading || isLoadingAdmin}
+            >
               <ShieldCheck size={18} aria-hidden="true" />
-              Load
+              Login & load
             </button>
           </div>
 
@@ -574,7 +759,7 @@ export function App() {
                   required
                 />
               </label>
-              <button className="primary-button" type="submit" disabled={isCreatingOffer}>
+              <button className="primary-button" type="submit" disabled={isCreatingOffer || !adminToken}>
                 <PlusCircle size={18} aria-hidden="true" />
                 Create
               </button>
@@ -628,7 +813,7 @@ export function App() {
                   required
                 />
               </label>
-              <button className="primary-button" type="submit" disabled={isCreatingSlot}>
+              <button className="primary-button" type="submit" disabled={isCreatingSlot || !adminToken}>
                 <PlusCircle size={18} aria-hidden="true" />
                 Create
               </button>
@@ -662,7 +847,7 @@ export function App() {
               <button
                 className="secondary-button"
                 type="button"
-                disabled={isLoadingAdminSlots || selectedAdminOfferId === null}
+                disabled={isLoadingAdminSlots || !adminToken || selectedAdminOfferId === null}
                 onClick={() => {
                   if (selectedAdminOfferId !== null) {
                     void loadAdminSlots(selectedAdminOfferId);
@@ -687,7 +872,7 @@ export function App() {
                   <button
                     className="secondary-button danger compact-button"
                     type="button"
-                    disabled={slot.status !== 'OPEN' || cancellingSlotId === slot.id}
+                    disabled={!adminToken || slot.status !== 'OPEN' || cancellingSlotId === slot.id}
                     onClick={() => void cancelAdminSlot(slot)}
                   >
                     <XCircle size={16} aria-hidden="true" />

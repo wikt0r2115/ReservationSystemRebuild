@@ -2,11 +2,11 @@
 
 Base path: `/api/v1`.
 
-The current offer, availability and booking modules use HTTP Basic authentication:
+Protected endpoints use JWT bearer authentication. Get a token from the auth
+module and send it as:
 
 ```text
-admin:    admin / admin123
-customer: customer / customer123
+Authorization: Bearer <jwt>
 ```
 
 Rules:
@@ -18,8 +18,12 @@ Reservation endpoints under /reservations/**: CUSTOMER or ADMIN role.
 ```
 
 The auth module exposes customer registration and login endpoints. Login returns
-a JWT bearer token for future module integration; existing modules still use
-HTTP Basic until their security filters are migrated.
+a JWT bearer token. In the `dev` and `dev-postgres` profiles, the auth module
+seeds an admin account by default:
+
+```text
+admin@example.com / admin123
+```
 
 ## Error Shape
 
@@ -103,14 +107,14 @@ curl http://localhost:8080/api/v1/offers/1
 Admin list all offers:
 
 ```bash
-curl -u admin:admin123 http://localhost:8080/api/v1/admin/offers
+curl -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8080/api/v1/admin/offers
 ```
 
 Admin create offer:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/admin/offers \
-  -u admin:admin123 \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "City Tour",
@@ -124,7 +128,7 @@ Admin partial update:
 
 ```bash
 curl -X PATCH http://localhost:8080/api/v1/admin/offers/1 \
-  -u admin:admin123 \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "price": 219.99
@@ -134,7 +138,7 @@ curl -X PATCH http://localhost:8080/api/v1/admin/offers/1 \
 Admin archive:
 
 ```bash
-curl -u admin:admin123 -X DELETE http://localhost:8080/api/v1/admin/offers/1
+curl -H "Authorization: Bearer $ADMIN_TOKEN" -X DELETE http://localhost:8080/api/v1/admin/offers/1
 ```
 
 ## Availability API
@@ -149,7 +153,7 @@ Admin create slot:
 
 ```bash
 curl -X POST http://localhost:8081/api/v1/admin/offers/1/availability \
-  -u admin:admin123 \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "startsAt": "2099-06-02T10:00:00",
@@ -162,7 +166,7 @@ Admin partial update:
 
 ```bash
 curl -X PATCH http://localhost:8081/api/v1/admin/availability/1 \
-  -u admin:admin123 \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "capacity": 12
@@ -172,7 +176,7 @@ curl -X PATCH http://localhost:8081/api/v1/admin/availability/1 \
 Admin cancel slot:
 
 ```bash
-curl -u admin:admin123 -X DELETE http://localhost:8081/api/v1/admin/availability/1
+curl -H "Authorization: Bearer $ADMIN_TOKEN" -X DELETE http://localhost:8081/api/v1/admin/availability/1
 ```
 
 ## Availability Business Rules
@@ -188,7 +192,7 @@ Create reservation:
 
 ```bash
 curl -X POST http://localhost:8082/api/v1/reservations \
-  -u customer:customer123 \
+  -H "Authorization: Bearer $CUSTOMER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "availabilitySlotId": 1,
@@ -201,31 +205,31 @@ curl -X POST http://localhost:8082/api/v1/reservations \
 Get reservation by id:
 
 ```bash
-curl -u customer:customer123 http://localhost:8082/api/v1/reservations/1
+curl -H "Authorization: Bearer $CUSTOMER_TOKEN" http://localhost:8082/api/v1/reservations/1
 ```
 
 Find reservations by customer email:
 
 ```bash
-curl -u customer:customer123 "http://localhost:8082/api/v1/reservations?customerEmail=jan@example.com"
+curl -H "Authorization: Bearer $CUSTOMER_TOKEN" "http://localhost:8082/api/v1/reservations?customerEmail=jan@example.com"
 ```
 
 Admin list all reservations:
 
 ```bash
-curl -u admin:admin123 http://localhost:8082/api/v1/admin/reservations
+curl -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8082/api/v1/admin/reservations
 ```
 
 Admin list reservations for a slot:
 
 ```bash
-curl -u admin:admin123 http://localhost:8082/api/v1/admin/availability/1/reservations
+curl -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8082/api/v1/admin/availability/1/reservations
 ```
 
 Cancel reservation:
 
 ```bash
-curl -u customer:customer123 -X DELETE http://localhost:8082/api/v1/reservations/1
+curl -H "Authorization: Bearer $CUSTOMER_TOKEN" -X DELETE http://localhost:8082/api/v1/reservations/1
 ```
 
 ## Booking Business Rules

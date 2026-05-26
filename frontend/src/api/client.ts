@@ -1,4 +1,4 @@
-import type { ApiErrorResponse, Credentials } from '../types';
+import type { ApiErrorResponse } from '../types';
 
 export class ApiRequestError extends Error {
   readonly status: number;
@@ -14,7 +14,7 @@ export class ApiRequestError extends Error {
 type RequestOptions = {
   method?: 'GET' | 'POST' | 'DELETE';
   body?: unknown;
-  credentials?: Credentials;
+  accessToken?: string;
 };
 
 export async function requestJson<T>(url: string, options: RequestOptions = {}): Promise<T> {
@@ -24,8 +24,8 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
     headers.set('Content-Type', 'application/json');
   }
 
-  if (options.credentials) {
-    headers.set('Authorization', `Basic ${encodeBasicAuth(options.credentials)}`);
+  if (options.accessToken) {
+    headers.set('Authorization', `Bearer ${options.accessToken}`);
   }
 
   const response = await fetch(url, {
@@ -43,10 +43,6 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
   }
 
   return payload as T;
-}
-
-function encodeBasicAuth(credentials: Credentials): string {
-  return window.btoa(`${credentials.username}:${credentials.password}`);
 }
 
 function normalizeError(status: number, payload: unknown): ApiErrorResponse {

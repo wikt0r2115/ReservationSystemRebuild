@@ -7,7 +7,7 @@ offers/slots, making reservations and reviewing admin data.
 
 The project is intentionally still a portfolio MVP. It keeps H2 for fast
 local/test runs, and also has a PostgreSQL/Flyway/Docker Compose development
-path plus HTTP Basic module guards and a JWT auth module foundation.
+path plus JWT authentication for protected backend endpoints.
 
 ## Current Status
 
@@ -20,8 +20,8 @@ path plus HTTP Basic module guards and a JWT auth module foundation.
 - H2 for current local/dev/test setup
 - PostgreSQL dev profile with Flyway migrations
 - Docker Compose for local PostgreSQL
-- Spring Security HTTP Basic for current module guards
-- JWT auth module with customer registration and login
+- Spring Security with JWT bearer tokens for protected endpoints
+- Auth module with customer registration and login
 - OpenAPI UI through Springdoc in the `dev` profile
 - React 19 + Vite + TypeScript frontend
 
@@ -133,16 +133,17 @@ prefixes, so the backend modules should be running on their default ports:
 /offer-api        -> http://localhost:8080
 /availability-api -> http://localhost:8081
 /booking-api      -> http://localhost:8082
+/auth-api         -> http://localhost:8083
 ```
 
-For the complete browser flow across all three backend apps, run the modules
+For the complete browser flow across all four backend apps, run the modules
 against the shared PostgreSQL database with `--spring.profiles.active=dev-postgres`.
 The default H2 setup is useful for isolated module work, but each app gets its
 own in-memory database, so data created through `availability` is not shared
 with `booking`.
 
-Frontend customer credentials can be overridden with `VITE_CUSTOMER_USERNAME`
-and `VITE_CUSTOMER_PASSWORD`. Admin credentials are entered in the UI.
+Frontend auth defaults can be overridden with `VITE_CUSTOMER_EMAIL`,
+`VITE_CUSTOMER_PASSWORD`, `VITE_ADMIN_EMAIL` and `VITE_ADMIN_PASSWORD`.
 
 Swagger UI is enabled in the `dev` profile and disabled in default/test/prod:
 
@@ -188,33 +189,65 @@ password: reservation
 They can be overridden with `DATABASE_URL`, `DATABASE_USERNAME` and
 `DATABASE_PASSWORD`.
 
-Default local API users:
+Default local auth data:
 
 ```text
-admin:    admin / admin123
-customer: customer / customer123
+admin seed in dev/dev-postgres: admin@example.com / admin123
+customer accounts: registered through POST /api/v1/auth/register
 ```
 
 ## Smoke Test
 
-The booking module has a dev-only seed availability slot so the reservation
-flow can be tested through real HTTP requests. The same flow works with
-`dev-postgres`; use `-u customer:customer123` for reservation endpoints and
-`-u admin:admin123` for admin endpoints.
+The booking module has a dev-only seed availability slot, and the auth module
+can issue a JWT accepted by booking when both apps use the same JWT settings.
+The same flow works with `dev-postgres`.
 
-Start booking with the `dev` profile:
+Build auth and booking:
 
 ```bash
 cd reservation
-mvn -pl booking -am -DskipTests package
+mvn -pl auth,booking -am -DskipTests package
+```
+
+Start auth with the `dev` profile:
+
+```bash
+java -jar auth/target/auth-0.0.1-SNAPSHOT-exec.jar --spring.profiles.active=dev
+```
+
+Start booking with the `dev` profile in another terminal:
+
+```bash
 java -jar booking/target/booking-0.0.1-SNAPSHOT-exec.jar --spring.profiles.active=dev
 ```
 
-In another terminal:
+Register and log in a customer, then put the returned `token` into
+`CUSTOMER_TOKEN`:
+
+```bash
+curl -i -X POST http://localhost:8083/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "displayName": "Jan Kowalski",
+    "email": "jan@example.com",
+    "password": "customer123"
+  }'
+```
+
+```bash
+curl -X POST http://localhost:8083/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "jan@example.com",
+    "password": "customer123"
+  }'
+```
+
+Create a reservation:
 
 ```bash
 curl -i -X POST http://localhost:8082/api/v1/reservations \
-  -u customer:customer123 \
+  -H "Authorization: Bearer $CUSTOMER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "availabilitySlotId": 1,
@@ -225,11 +258,11 @@ curl -i -X POST http://localhost:8082/api/v1/reservations \
 ```
 
 ```bash
-curl -i -u customer:customer123 http://localhost:8082/api/v1/reservations/1
+curl -i -H "Authorization: Bearer $CUSTOMER_TOKEN" http://localhost:8082/api/v1/reservations/1
 ```
 
 ```bash
-curl -i -X DELETE -u customer:customer123 http://localhost:8082/api/v1/reservations/1
+curl -i -X DELETE -H "Authorization: Bearer $CUSTOMER_TOKEN" http://localhost:8082/api/v1/reservations/1
 ```
 
 For the full endpoint list and examples, see
@@ -275,10 +308,9 @@ GET    /api/v1/admin/availability/{slotId}/reservations
 DELETE /api/v1/reservations/{reservationId}
 ```
 
-Auth endpoints issue JWTs for the auth module. Existing offer, availability and
-booking modules still use HTTP Basic credentials: admin endpoints require the
-`ADMIN` role, booking reservation endpoints require the `CUSTOMER` or `ADMIN`
-role, and public offer/availability read endpoints remain unauthenticated.
+Auth endpoints issue JWTs. Admin endpoints require a bearer token with the
+`ADMIN` role, booking reservation endpoints require `CUSTOMER` or `ADMIN`, and
+public offer/availability read endpoints remain unauthenticated.
 
 ## MVP Architecture
 

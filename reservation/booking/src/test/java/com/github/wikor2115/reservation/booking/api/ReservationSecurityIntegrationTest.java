@@ -4,8 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import java.time.Duration;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,11 +19,19 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import com.github.wikor2115.reservation.availability.repository.AvailabilitySlotRepository;
 import com.github.wikor2115.reservation.booking.repository.ReservationRepository;
+import com.github.wikor2115.reservation.security.AuthenticatedUser;
+import com.github.wikor2115.reservation.security.UserRole;
+import com.github.wikor2115.reservation.security.jwt.JwtProperties;
+import com.github.wikor2115.reservation.security.jwt.JwtTokenService;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class ReservationSecurityIntegrationTest {
+    private static final JwtTokenService TOKEN_SERVICE = new JwtTokenService(new JwtProperties(
+            "test-secret",
+            "reservation-auth-test",
+            Duration.ofHours(1)));
 
     @Autowired
     private MockMvc mockMvc;
@@ -49,19 +56,19 @@ class ReservationSecurityIntegrationTest {
 
     @Test
     void createReservation_withCustomerRole_reachesControllerValidation() throws Exception {
-        mockMvc.perform(withBasicAuth(invalidCreateReservationRequest(), "customer", "customer123"))
+        mockMvc.perform(withBearerToken(invalidCreateReservationRequest(), UserRole.CUSTOMER))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void adminReservationList_withCustomerRole_returnsForbidden() throws Exception {
-        mockMvc.perform(withBasicAuth(get("/api/v1/admin/reservations"), "customer", "customer123"))
+        mockMvc.perform(withBearerToken(get("/api/v1/admin/reservations"), UserRole.CUSTOMER))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void adminReservationList_withAdminRole_reachesController() throws Exception {
-        mockMvc.perform(withBasicAuth(get("/api/v1/admin/reservations"), "admin", "admin123"))
+        mockMvc.perform(withBearerToken(get("/api/v1/admin/reservations"), UserRole.ADMIN))
                 .andExpect(status().isOk());
     }
 
@@ -91,13 +98,11 @@ class ReservationSecurityIntegrationTest {
                         """);
     }
 
-    private static MockHttpServletRequestBuilder withBasicAuth(
+    private static MockHttpServletRequestBuilder withBearerToken(
             MockHttpServletRequestBuilder request,
-            String username,
-            String password
+            UserRole role
     ) {
-        String token = Base64.getEncoder()
-                .encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
-        return request.header(HttpHeaders.AUTHORIZATION, "Basic " + token);
+        String token = TOKEN_SERVICE.createToken(new AuthenticatedUser(1L, role.name().toLowerCase() + "@example.com", role));
+        return request.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
     }
 }
