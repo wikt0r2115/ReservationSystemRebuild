@@ -151,4 +151,5 @@ jobs:
         with:
           name: postgres-smoke-logs
           path: .ci-postgres-smoke
+          include-hidden-files: true
           if-no-files-found: ignore
