@@ -13,6 +13,7 @@
 
     <modules>
         <module>security-common</module>
+        <module>auth</module>
         <module>offer</module>
         <module>availability</module>
         <module>booking</module>

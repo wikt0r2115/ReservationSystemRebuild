@@ -28,6 +28,7 @@ Current Maven modules:
 
 ```text
 reservation/security-common
+reservation/auth
 reservation/offer
 reservation/availability
 reservation/booking
@@ -107,6 +108,7 @@ Default module ports:
 offer:        http://localhost:8080
 availability: http://localhost:8081
 booking:      http://localhost:8082
+auth:         http://localhost:8083
 ```
 
 Run the frontend development server:

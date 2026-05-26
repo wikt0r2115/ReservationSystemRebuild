@@ -35,6 +35,8 @@ jobs:
           cache: maven
           cache-dependency-path: |
             reservation/pom.xml
+            reservation/security-common/pom.xml
+            reservation/auth/pom.xml
             reservation/offer/pom.xml
             reservation/availability/pom.xml
             reservation/booking/pom.xml
@@ -72,6 +74,8 @@ jobs:
           cache: maven
           cache-dependency-path: |
             reservation/pom.xml
+            reservation/security-common/pom.xml
+            reservation/auth/pom.xml
             reservation/offer/pom.xml
             reservation/availability/pom.xml
             reservation/booking/pom.xml
