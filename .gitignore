@@ -15,3 +15,9 @@ target/
 
 logs/
 *.log
+
+node_modules/
+dist/
+
+.local-stack/
+run-local-stack.sh

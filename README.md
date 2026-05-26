@@ -1,7 +1,9 @@
-# Reservation System Backend
+# Reservation System
 
-Spring Boot backend for a reservation system. The current MVP contains three
-tested modules: offers, availability slots and reservations.
+Spring Boot backend and React frontend for a reservation system. The current
+MVP contains three tested backend modules: offers, availability slots and
+reservations. The frontend provides a small operations console for creating
+offers/slots, making reservations and reviewing admin data.
 
 The project is intentionally still a portfolio MVP. It keeps H2 for fast
 local/test runs, and also has a PostgreSQL/Flyway/Docker Compose development
@@ -20,6 +22,7 @@ path plus simple HTTP Basic authentication for customer/admin flows.
 - Docker Compose for local PostgreSQL
 - Spring Security HTTP Basic for customer/admin separation
 - OpenAPI UI through Springdoc in the `dev` profile
+- React 19 + Vite + TypeScript frontend
 
 Current Maven modules:
 
@@ -27,6 +30,12 @@ Current Maven modules:
 reservation/offer
 reservation/availability
 reservation/booking
+```
+
+Frontend app:
+
+```text
+frontend
 ```
 
 ## Documentation
@@ -69,6 +78,14 @@ Build all modules:
 mvn clean package
 ```
 
+Build the frontend:
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
 ## Run Locally
 
 Run one module with the default H2 profile as an executable Spring Boot jar:
@@ -90,6 +107,38 @@ offer:        http://localhost:8080
 availability: http://localhost:8081
 booking:      http://localhost:8082
 ```
+
+Run the frontend development server:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite dev server starts on:
+
+```text
+http://localhost:5173
+```
+
+During local development the frontend proxies API traffic through these
+prefixes, so the backend modules should be running on their default ports:
+
+```text
+/offer-api        -> http://localhost:8080
+/availability-api -> http://localhost:8081
+/booking-api      -> http://localhost:8082
+```
+
+For the complete browser flow across all three backend apps, run the modules
+against the shared PostgreSQL database with `--spring.profiles.active=dev-postgres`.
+The default H2 setup is useful for isolated module work, but each app gets its
+own in-memory database, so data created through `availability` is not shared
+with `booking`.
+
+Frontend customer credentials can be overridden with `VITE_CUSTOMER_USERNAME`
+and `VITE_CUSTOMER_PASSWORD`. Admin credentials are entered in the UI.
 
 Swagger UI is enabled in the `dev` profile and disabled in default/test/prod:
 
@@ -237,7 +286,7 @@ Latest local full reactor result:
 ```text
 mvn test
 offer:        46 tests
-availability: 68 tests
+availability: 72 tests
 booking:      59 tests
 BUILD SUCCESS
 
