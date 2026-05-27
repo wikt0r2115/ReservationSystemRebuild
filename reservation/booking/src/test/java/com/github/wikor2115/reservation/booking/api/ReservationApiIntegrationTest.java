@@ -83,7 +83,7 @@ class ReservationApiIntegrationTest {
                 .andExpect(jsonPath("$.customerName").value("Jan Kowalski"))
                 .andExpect(jsonPath("$.customerEmail").value("jan@example.com"))
                 .andExpect(jsonPath("$.partySize").value(2))
-                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+                .andExpect(jsonPath("$.status").value("PENDING"));
 
         Reservation reservation = reservationRepository.findAll().get(0);
         assertEquals(2, availabilitySlotRepository.findById(slot.getId()).orElseThrow().getReservedCount());
@@ -92,7 +92,7 @@ class ReservationApiIntegrationTest {
                 .with(customerAuth("jan@example.com")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(reservation.getId()))
-                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+                .andExpect(jsonPath("$.status").value("PENDING"));
 
         mockMvc.perform(get("/api/v1/reservations")
                 .with(customerAuth("jan@example.com"))
@@ -105,6 +105,11 @@ class ReservationApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].availabilitySlotId").value(slot.getId()));
+
+        mockMvc.perform(post("/api/v1/admin/reservations/{reservationId}/confirm", reservation.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(reservation.getId()))
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
 
         mockMvc.perform(post("/api/v1/reservations")
                 .with(customerAuth("anna@example.com"))
@@ -126,6 +131,35 @@ class ReservationApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(reservation.getId()))
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+        assertEquals(0, availabilitySlotRepository.findById(slot.getId()).orElseThrow().getReservedCount());
+    }
+
+    @Test
+    void rejectReservation_rejectsPendingReservationAndReleasesCapacity() throws Exception {
+        AvailabilitySlot slot = availabilitySlotRepository.save(sampleSlot());
+
+        mockMvc.perform(post("/api/v1/reservations")
+                .with(customerAuth("jan@example.com"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "availabilitySlotId": %d,
+                          "customerName": "Jan Kowalski",
+                          "customerEmail": "jan@example.com",
+                          "partySize": 2
+                        }
+                        """.formatted(slot.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING"));
+
+        Reservation reservation = reservationRepository.findAll().get(0);
+        assertEquals(2, availabilitySlotRepository.findById(slot.getId()).orElseThrow().getReservedCount());
+
+        mockMvc.perform(post("/api/v1/admin/reservations/{reservationId}/reject", reservation.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(reservation.getId()))
+                .andExpect(jsonPath("$.status").value("REJECTED"));
 
         assertEquals(0, availabilitySlotRepository.findById(slot.getId()).orElseThrow().getReservedCount());
     }

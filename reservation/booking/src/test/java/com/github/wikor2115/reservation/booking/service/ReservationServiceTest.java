@@ -72,7 +72,7 @@ class ReservationServiceTest {
                 CUSTOMER_EMAIL,
                 PARTY_SIZE);
 
-        assertEquals(ReservationStatus.CONFIRMED, reservation.getStatus());
+        assertEquals(ReservationStatus.PENDING, reservation.getStatus());
         assertEquals(AVAILABILITY_SLOT_ID, reservation.getAvailabilitySlotId());
         assertEquals(OFFER_ID, reservation.getOfferId());
         assertEquals(PARTY_SIZE, reservation.getPartySize());
@@ -191,6 +191,67 @@ class ReservationServiceTest {
     }
 
     @Test
+    void confirmReservation_whenPending_confirmsAndSavesReservation() {
+        Reservation reservation = sampleReservation();
+        when(reservationRepository.findById(RESERVATION_ID)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.save(reservation)).thenReturn(reservation);
+
+        Reservation result = reservationService.confirmReservation(RESERVATION_ID);
+
+        assertEquals(ReservationStatus.CONFIRMED, result.getStatus());
+        verify(reservationRepository).save(reservation);
+        verify(availabilitySlotRepository, never()).findById(any());
+        verify(availabilitySlotRepository, never()).save(any());
+    }
+
+    @Test
+    void confirmReservation_whenAlreadyConfirmed_throwsIllegalStateException() {
+        Reservation reservation = sampleReservation();
+        reservation.confirm();
+        when(reservationRepository.findById(RESERVATION_ID)).thenReturn(Optional.of(reservation));
+
+        assertThrows(IllegalStateException.class, () -> reservationService.confirmReservation(RESERVATION_ID));
+
+        verify(reservationRepository, never()).save(any());
+        verify(availabilitySlotRepository, never()).findById(any());
+    }
+
+    @Test
+    void rejectReservation_whenPending_rejectsReleasesAvailabilitySlotAndSavesBoth() {
+        Reservation reservation = sampleReservation();
+        AvailabilitySlot slot = sampleSlot(10);
+        slot.reserve(PARTY_SIZE);
+        when(reservationRepository.findById(RESERVATION_ID)).thenReturn(Optional.of(reservation));
+        when(availabilitySlotRepository.findById(AVAILABILITY_SLOT_ID)).thenReturn(Optional.of(slot));
+        when(availabilitySlotRepository.save(slot)).thenReturn(slot);
+        when(reservationRepository.save(reservation)).thenReturn(reservation);
+
+        Reservation result = reservationService.rejectReservation(RESERVATION_ID);
+
+        assertEquals(ReservationStatus.REJECTED, result.getStatus());
+        assertEquals(0, slot.getReservedCount());
+        verify(availabilitySlotRepository).save(slot);
+        verify(reservationRepository).save(reservation);
+    }
+
+    @Test
+    void rejectReservation_whenAlreadyConfirmed_throwsIllegalStateExceptionAndKeepsCapacityReserved() {
+        Reservation reservation = sampleReservation();
+        reservation.confirm();
+        AvailabilitySlot slot = sampleSlot(10);
+        slot.reserve(PARTY_SIZE);
+        when(reservationRepository.findById(RESERVATION_ID)).thenReturn(Optional.of(reservation));
+        when(availabilitySlotRepository.findById(AVAILABILITY_SLOT_ID)).thenReturn(Optional.of(slot));
+
+        assertThrows(IllegalStateException.class, () -> reservationService.rejectReservation(RESERVATION_ID));
+
+        assertEquals(ReservationStatus.CONFIRMED, reservation.getStatus());
+        assertEquals(PARTY_SIZE, slot.getReservedCount());
+        verify(availabilitySlotRepository, never()).save(any());
+        verify(reservationRepository, never()).save(any());
+    }
+
+    @Test
     void cancelReservation_whenReservationMissing_throwsReservationNotFoundException() {
         when(reservationRepository.findById(RESERVATION_ID)).thenReturn(Optional.empty());
 
@@ -210,7 +271,7 @@ class ReservationServiceTest {
         assertThrows(AvailabilitySlotNotFoundException.class,
                 () -> reservationService.cancelReservation(RESERVATION_ID));
 
-        assertEquals(ReservationStatus.CONFIRMED, reservation.getStatus());
+        assertEquals(ReservationStatus.PENDING, reservation.getStatus());
         assertNull(reservation.getCancelledAt());
         verify(availabilitySlotRepository, never()).save(any());
         verify(reservationRepository, never()).save(any());

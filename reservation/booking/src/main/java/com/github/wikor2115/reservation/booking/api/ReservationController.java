@@ -20,10 +20,13 @@ import com.github.wikor2115.reservation.booking.service.ReservationService;
 import com.github.wikor2115.reservation.security.AuthenticatedUser;
 import com.github.wikor2115.reservation.security.UserRole;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1")
+@Tag(name = "Reservations", description = "Customer reservation lifecycle and admin reservation management")
 public class ReservationController {
     private final ReservationService reservationService;
 
@@ -33,6 +36,9 @@ public class ReservationController {
 
     @PostMapping("/reservations")
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(
+            summary = "Create a pending reservation",
+            description = "Creates a customer reservation for an availability slot and reserves capacity immediately.")
     public ReservationResponse createReservation(
             @Valid @RequestBody CreateReservationRequest request,
             Authentication authentication
@@ -47,6 +53,9 @@ public class ReservationController {
     }
 
     @GetMapping("/reservations/{reservationId}")
+    @Operation(
+            summary = "Get reservation by id",
+            description = "Returns one reservation. Customers can access only reservations matching their token email.")
     public ReservationResponse findReservationById(
             @PathVariable Long reservationId,
             Authentication authentication
@@ -58,6 +67,9 @@ public class ReservationController {
     }
 
     @GetMapping(value = "/reservations", params = "customerEmail")
+    @Operation(
+            summary = "List reservations for customer email",
+            description = "Returns reservations for a customer email. Customer tokens are restricted to their own email.")
     public List<ReservationResponse> findReservationsByCustomerEmail(
             @RequestParam String customerEmail,
             Authentication authentication
@@ -70,6 +82,7 @@ public class ReservationController {
     }
 
     @GetMapping("/admin/reservations")
+    @Operation(summary = "Admin list reservations", description = "Returns all reservations ordered by creation time.")
     public List<ReservationResponse> findAllReservations() {
         return reservationService.findAllReservations().stream()
                 .map(this::toResponse)
@@ -77,13 +90,35 @@ public class ReservationController {
     }
 
     @GetMapping("/admin/availability/{slotId}/reservations")
+    @Operation(
+            summary = "Admin list reservations for a slot",
+            description = "Returns all reservations associated with one availability slot.")
     public List<ReservationResponse> findReservationsByAvailabilitySlotId(@PathVariable Long slotId) {
         return reservationService.findReservationsByAvailabilitySlotId(slotId).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
+    @PostMapping("/admin/reservations/{reservationId}/confirm")
+    @Operation(
+            summary = "Admin confirm reservation",
+            description = "Confirms a pending reservation. Only pending reservations can be confirmed.")
+    public ReservationResponse confirmReservation(@PathVariable Long reservationId) {
+        return toResponse(reservationService.confirmReservation(reservationId));
+    }
+
+    @PostMapping("/admin/reservations/{reservationId}/reject")
+    @Operation(
+            summary = "Admin reject reservation",
+            description = "Rejects a pending reservation and releases the reserved slot capacity.")
+    public ReservationResponse rejectReservation(@PathVariable Long reservationId) {
+        return toResponse(reservationService.rejectReservation(reservationId));
+    }
+
     @DeleteMapping("/reservations/{reservationId}")
+    @Operation(
+            summary = "Cancel reservation",
+            description = "Cancels a pending or confirmed reservation and releases reserved capacity.")
     public ReservationResponse cancelReservation(
             @PathVariable Long reservationId,
             Authentication authentication

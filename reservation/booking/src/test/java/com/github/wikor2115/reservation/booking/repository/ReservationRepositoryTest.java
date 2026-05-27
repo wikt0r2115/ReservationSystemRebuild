@@ -50,7 +50,7 @@ class ReservationRepositoryTest {
         assertEquals(AVAILABILITY_SLOT_ID, found.getAvailabilitySlotId());
         assertEquals(OFFER_ID, found.getOfferId());
         assertEquals(CUSTOMER_EMAIL, found.getCustomerEmail());
-        assertEquals(ReservationStatus.CONFIRMED, found.getStatus());
+        assertEquals(ReservationStatus.PENDING, found.getStatus());
     }
 
     @Test

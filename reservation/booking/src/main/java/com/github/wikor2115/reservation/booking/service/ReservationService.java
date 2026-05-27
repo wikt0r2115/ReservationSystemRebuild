@@ -82,6 +82,25 @@ public class ReservationService {
     }
 
     @Transactional
+    public Reservation confirmReservation(Long reservationId) {
+        Reservation reservation = findReservationOrThrow(reservationId);
+        reservation.confirm();
+        return reservationRepository.save(reservation);
+    }
+
+    @Transactional
+    public Reservation rejectReservation(Long reservationId) {
+        Reservation reservation = findReservationOrThrow(reservationId);
+        AvailabilitySlot slot = findAvailabilitySlotOrThrow(reservation.getAvailabilitySlotId());
+
+        reservation.reject();
+        slot.release(reservation.getPartySize());
+
+        availabilitySlotRepository.save(slot);
+        return reservationRepository.save(reservation);
+    }
+
+    @Transactional
     public Reservation cancelReservation(Long reservationId) {
         Reservation reservation = findReservationOrThrow(reservationId);
         AvailabilitySlot slot = findAvailabilitySlotOrThrow(reservation.getAvailabilitySlotId());

@@ -14,11 +14,14 @@ import com.github.wikor2115.reservation.auth.domain.UserAccount;
 import com.github.wikor2115.reservation.auth.service.AuthService;
 import com.github.wikor2115.reservation.security.AuthenticatedUser;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/auth")
 @Validated
+@Tag(name = "Authentication", description = "Customer registration, login and password management")
 public class AuthController {
     private final AuthService authService;
 
@@ -27,6 +30,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @Operation(summary = "Register customer", description = "Creates a customer account with an email and password.")
     public ResponseEntity<UserAccountResponse> registerCustomer(
             @Valid @RequestBody RegisterCustomerRequest request
     ) {
@@ -38,11 +42,13 @@ public class AuthController {
     }
 
     @PostMapping("/login")
+    @Operation(summary = "Login", description = "Authenticates a user and returns a JWT bearer token.")
     public AuthTokenResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request.email(), request.password());
     }
 
     @PostMapping("/change-password")
+    @Operation(summary = "Change password", description = "Changes the password for the authenticated user.")
     public ResponseEntity<Void> changePassword(
             @Valid @RequestBody ChangePasswordRequest request,
             Authentication authentication
