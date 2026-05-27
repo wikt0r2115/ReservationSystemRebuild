@@ -18,7 +18,13 @@ import { createAvailabilitySlot, listAdminSlots, listOpenSlots } from './api/ava
 import { login, registerCustomer } from './api/auth';
 import { ApiRequestError } from './api/client';
 import { createOffer, listActiveOffers, listAdminOffers } from './api/offers';
-import { cancelReservation, createReservation, listAdminReservations } from './api/reservations';
+import {
+  cancelReservation,
+  confirmReservation,
+  createReservation,
+  listAdminReservations,
+  rejectReservation,
+} from './api/reservations';
 import { apiConfig } from './config';
 import type {
   ApiErrorResponse,
@@ -70,8 +76,18 @@ const emptyOfferForm: OfferFormState = {
 const CUSTOMER_TOKEN_KEY = 'reservation.customer.token';
 const ADMIN_TOKEN_KEY = 'reservation.admin.token';
 
+function getScreenFromPath(pathname = window.location.pathname): Screen {
+  if (pathname.startsWith('/admin')) {
+    return 'admin';
+  }
+  if (pathname.startsWith('/auth')) {
+    return 'auth';
+  }
+  return 'landing';
+}
+
 export function App() {
-  const [screen, setScreen] = useState<Screen>('landing');
+  const [screen, setScreen] = useState<Screen>(() => getScreenFromPath());
   const [offers, setOffers] = useState<Offer[]>([]);
   const [selectedOfferId, setSelectedOfferId] = useState<number | null>(null);
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
@@ -110,10 +126,9 @@ export function App() {
   const [isCreatingSlot, setIsCreatingSlot] = useState(false);
   const [isCustomerAuthLoading, setIsCustomerAuthLoading] = useState(false);
   const [isAdminAuthLoading, setIsAdminAuthLoading] = useState(false);
+  const [reservationActionId, setReservationActionId] = useState<number | null>(null);
   const [error, setError] = useState<ApiErrorResponse | null>(null);
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
-
-  const isAdminPort = window.location.port === apiConfig.adminPort;
 
   const selectedOffer = useMemo(
     () => offers.find((offer) => offer.id === selectedOfferId) ?? null,
@@ -174,10 +189,18 @@ export function App() {
   }, [adminToken]);
 
   useEffect(() => {
-    if (screen === 'admin' && !isAdminPort) {
-      setScreen('landing');
+    const handlePop = () => setScreen(getScreenFromPath());
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, []);
+
+  function navigate(nextScreen: Screen) {
+    const nextPath = nextScreen === 'landing' ? '/' : `/${nextScreen}`;
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({ screen: nextScreen }, '', nextPath);
     }
-  }, [screen, isAdminPort]);
+    setScreen(nextScreen);
+  }
 
   async function loadOffers() {
     setIsLoadingOffers(true);
@@ -199,7 +222,9 @@ export function App() {
     try {
       const loadedSlots = await listOpenSlots(offerId);
       setSlots(loadedSlots);
-      setSelectedSlotId((current) => current ?? loadedSlots[0]?.id ?? null);
+      setSelectedSlotId((current) =>
+        loadedSlots.some((slot) => slot.id === current) ? current : loadedSlots[0]?.id ?? null,
+      );
     } catch (caught) {
       setError(toApiError(caught));
     } finally {
@@ -246,6 +271,9 @@ export function App() {
       const reservation = await createReservation(payload, accessToken);
       setLastReservation(reservation);
       setReservationForm(emptyReservationForm);
+      if (selectedOfferId !== null) {
+        await loadSlots(selectedOfferId);
+      }
     } catch (caught) {
       setError(toApiError(caught));
     } finally {
@@ -273,6 +301,9 @@ export function App() {
     try {
       const reservation = await cancelReservation(lastReservation.id, accessToken);
       setLastReservation(reservation);
+      if (selectedOfferId !== null) {
+        await loadSlots(selectedOfferId);
+      }
     } catch (caught) {
       setError(toApiError(caught));
     } finally {
@@ -409,6 +440,65 @@ export function App() {
     }
   }
 
+  async function confirmAdminReservation(reservationId: number) {
+    const accessToken = requireAccessToken(adminToken);
+    if (!accessToken) {
+      setError({
+        code: 'ADMIN_LOGIN_REQUIRED',
+        message: 'Admin login is required',
+        details: [],
+      });
+      return;
+    }
+
+    setReservationActionId(reservationId);
+    setError(null);
+    try {
+      const updated = await confirmReservation(reservationId, accessToken);
+      setAdminReservations((current) =>
+        current.map((reservation) => (reservation.id === updated.id ? updated : reservation)),
+      );
+      if (selectedOfferId !== null && updated.offerId === selectedOfferId) {
+        await loadSlots(selectedOfferId);
+      }
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setReservationActionId(null);
+    }
+  }
+
+  async function rejectAdminReservation(reservationId: number) {
+    const accessToken = requireAccessToken(adminToken);
+    if (!accessToken) {
+      setError({
+        code: 'ADMIN_LOGIN_REQUIRED',
+        message: 'Admin login is required',
+        details: [],
+      });
+      return;
+    }
+
+    setReservationActionId(reservationId);
+    setError(null);
+    try {
+      const updated = await rejectReservation(reservationId, accessToken);
+      setAdminReservations((current) =>
+        current.map((reservation) => (reservation.id === updated.id ? updated : reservation)),
+      );
+      if (selectedOfferId !== null && updated.offerId === selectedOfferId) {
+        await loadSlots(selectedOfferId);
+      }
+      if (selectedAdminOfferId !== null && updated.offerId === selectedAdminOfferId) {
+        await loadAdminSlots(updated.offerId, accessToken);
+      }
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setReservationActionId(null);
+    }
+  }
+
   async function submitCustomerRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsCustomerAuthLoading(true);
@@ -422,7 +512,7 @@ export function App() {
         customerName: current.customerName || customerAuthForm.displayName,
         customerEmail: current.customerEmail || customerAuthForm.email,
       }));
-      setScreen('landing');
+      navigate('landing');
       setAuthTab('login');
     } catch (caught) {
       setError(toApiError(caught));
@@ -442,7 +532,7 @@ export function App() {
         ...current,
         customerEmail: current.customerEmail || customerLoginForm.email,
       }));
-      setScreen('landing');
+      navigate('landing');
     } catch (caught) {
       setError(toApiError(caught));
     } finally {
@@ -458,7 +548,7 @@ export function App() {
       const token = await login(adminLoginForm);
       setAdminToken(token.token);
       await loadAdminData(token.token);
-      setScreen('admin');
+      navigate('admin');
     } catch (caught) {
       setError(toApiError(caught));
     } finally {
@@ -491,20 +581,18 @@ export function App() {
           </div>
         </div>
         <div className="nav-actions">
-          <button className="ghost-button" type="button" onClick={() => setScreen('landing')}>
+          <button className="ghost-button" type="button" onClick={() => navigate('landing')}>
             <DoorOpen size={16} aria-hidden="true" />
             Landing
           </button>
-          <button className="ghost-button" type="button" onClick={() => setScreen('auth')}>
+          <button className="ghost-button" type="button" onClick={() => navigate('auth')}>
             <LogIn size={16} aria-hidden="true" />
             Login / Register
           </button>
-          {isAdminPort ? (
-            <button className="ghost-button" type="button" onClick={() => setScreen('admin')}>
-              <LayoutDashboard size={16} aria-hidden="true" />
-              Admin
-            </button>
-          ) : null}
+          <button className="ghost-button" type="button" onClick={() => navigate('admin')}>
+            <LayoutDashboard size={16} aria-hidden="true" />
+            Admin
+          </button>
         </div>
       </header>
 
@@ -615,39 +703,6 @@ export function App() {
                 </form>
               )}
 
-              {isAdminPort ? (
-                <div className="auth-divider">
-                  <span>Admin access</span>
-                  <form className="auth-form" onSubmit={submitAdminLogin}>
-                    <label>
-                      Admin email
-                      <input
-                        type="email"
-                        value={adminLoginForm.email}
-                        onChange={(event) =>
-                          setAdminLoginForm((current) => ({ ...current, email: event.target.value }))
-                        }
-                        required
-                      />
-                    </label>
-                    <label>
-                      Admin password
-                      <input
-                        type="password"
-                        value={adminLoginForm.password}
-                        onChange={(event) =>
-                          setAdminLoginForm((current) => ({ ...current, password: event.target.value }))
-                        }
-                        required
-                      />
-                    </label>
-                    <button className="secondary-button" type="submit" disabled={isAdminAuthLoading}>
-                      <ShieldCheck size={16} aria-hidden="true" />
-                      Login as admin
-                    </button>
-                  </form>
-                </div>
-              ) : null}
             </div>
           </div>
         </section>
@@ -655,253 +710,270 @@ export function App() {
 
       {screen === 'admin' && (
         <section className="admin-screen">
-          {!isAdminPort ? (
-            <div className="panel">
-              <h1>Admin panel is locked</h1>
-              <p className="helper">
-                Admin panel is available only on port <strong>{apiConfig.adminPort}</strong>.
-              </p>
-              <button className="secondary-button" type="button" onClick={() => setScreen('landing')}>
-                Back to landing
-              </button>
-            </div>
-          ) : (
-            <div className="admin-grid">
-              <div className="panel admin-card">
-                <div className="panel-header">
-                  <h2>
+          <div className="admin-grid">
+            <div className="panel admin-card">
+              <div className="panel-header">
+                <h2>
+                  <ShieldCheck size={16} aria-hidden="true" />
+                  Admin access
+                </h2>
+                {adminToken ? (
+                  <span className="tag success">Admin token active</span>
+                ) : (
+                  <span className="tag warning">Admin login required</span>
+                )}
+              </div>
+              <form className="auth-form" onSubmit={submitAdminLogin}>
+                <label>
+                  Admin email
+                  <input
+                    type="email"
+                    value={adminLoginForm.email}
+                    onChange={(event) => setAdminLoginForm((current) => ({ ...current, email: event.target.value }))}
+                    required
+                  />
+                </label>
+                <label>
+                  Admin password
+                  <input
+                    type="password"
+                    value={adminLoginForm.password}
+                    onChange={(event) => setAdminLoginForm((current) => ({ ...current, password: event.target.value }))}
+                    required
+                  />
+                </label>
+                <div className="button-row">
+                  <button className="primary-button" type="submit" disabled={isAdminAuthLoading}>
                     <ShieldCheck size={16} aria-hidden="true" />
-                    Admin access
-                  </h2>
-                  {adminToken ? (
-                    <span className="tag success">Admin token active</span>
-                  ) : (
-                    <span className="tag warning">Admin login required</span>
-                  )}
+                    Login
+                  </button>
+                  <button className="secondary-button" type="button" onClick={handleAdminLogout}>
+                    <LogOut size={16} aria-hidden="true" />
+                    Logout
+                  </button>
                 </div>
-                <form className="auth-form" onSubmit={submitAdminLogin}>
-                  <label>
-                    Admin email
-                    <input
-                      type="email"
-                      value={adminLoginForm.email}
-                      onChange={(event) =>
-                        setAdminLoginForm((current) => ({ ...current, email: event.target.value }))
-                      }
-                      required
-                    />
-                  </label>
-                  <label>
-                    Admin password
-                    <input
-                      type="password"
-                      value={adminLoginForm.password}
-                      onChange={(event) =>
-                        setAdminLoginForm((current) => ({ ...current, password: event.target.value }))
-                      }
-                      required
-                    />
-                  </label>
-                  <div className="button-row">
-                    <button className="primary-button" type="submit" disabled={isAdminAuthLoading}>
-                      <ShieldCheck size={16} aria-hidden="true" />
-                      Login
-                    </button>
-                    <button className="secondary-button" type="button" onClick={handleAdminLogout}>
-                      <LogOut size={16} aria-hidden="true" />
-                      Logout
-                    </button>
+              </form>
+            </div>
+
+            {!adminToken ? (
+              <div className="panel admin-card">
+                <h2>Admin panel</h2>
+                <p className="helper">Login as admin to access offers, slots, and reservation actions.</p>
+              </div>
+            ) : (
+              <>
+                <div className="panel admin-card">
+                  <div className="panel-header">
+                    <h2>
+                      <ClipboardList size={16} aria-hidden="true" />
+                      Offers
+                    </h2>
+                    <span className="tag">{adminOffers.length} total</span>
                   </div>
-                </form>
-              </div>
-
-              <div className="panel admin-card">
-                <div className="panel-header">
-                  <h2>
-                    <ClipboardList size={16} aria-hidden="true" />
-                    Offers
-                  </h2>
-                  <span className="tag">{adminOffers.length} total</span>
-                </div>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => loadAdminData()}
-                  disabled={isLoadingAdmin || !adminToken}
-                >
-                  Refresh admin data
-                </button>
-                <form className="admin-form" onSubmit={submitAdminOffer}>
-                  <label>
-                    Name
-                    <input
-                      type="text"
-                      value={offerForm.name}
-                      onChange={(event) => setOfferForm((current) => ({ ...current, name: event.target.value }))}
-                      maxLength={255}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Image URL
-                    <input
-                      type="url"
-                      value={offerForm.imageUrl}
-                      onChange={(event) => setOfferForm((current) => ({ ...current, imageUrl: event.target.value }))}
-                      maxLength={2048}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Description
-                    <textarea
-                      value={offerForm.description}
-                      onChange={(event) =>
-                        setOfferForm((current) => ({ ...current, description: event.target.value }))
-                      }
-                      maxLength={2048}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Price
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={offerForm.price}
-                      onChange={(event) => setOfferForm((current) => ({ ...current, price: event.target.value }))}
-                      required
-                    />
-                  </label>
-                  <button className="primary-button" type="submit" disabled={isCreatingOffer || !adminToken}>
-                    <PlusCircle size={16} aria-hidden="true" />
-                    Create offer
-                  </button>
-                </form>
-              </div>
-
-              <div className="panel admin-card">
-                <div className="panel-header">
-                  <h2>
-                    <CalendarDays size={16} aria-hidden="true" />
-                    Availability slots
-                  </h2>
-                  <span className="tag">{adminSlots.length} slots</span>
-                </div>
-                <form className="admin-form" onSubmit={submitAdminSlot}>
-                  <label>
-                    Offer
-                    <select
-                      value={slotForm.offerId}
-                      onChange={(event) => setSlotForm((current) => ({ ...current, offerId: event.target.value }))}
-                      required
-                    >
-                      <option value="">Select offer</option>
-                      {adminOfferOptions.map((offer) => (
-                        <option value={offer.id} key={offer.id}>
-                          {offer.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Starts
-                    <input
-                      type="datetime-local"
-                      value={slotForm.startsAt}
-                      onChange={(event) => setSlotForm((current) => ({ ...current, startsAt: event.target.value }))}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Ends
-                    <input
-                      type="datetime-local"
-                      value={slotForm.endsAt}
-                      onChange={(event) => setSlotForm((current) => ({ ...current, endsAt: event.target.value }))}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Capacity
-                    <input
-                      type="number"
-                      min="1"
-                      value={slotForm.capacity}
-                      onChange={(event) => setSlotForm((current) => ({ ...current, capacity: event.target.value }))}
-                      required
-                    />
-                  </label>
-                  <button className="primary-button" type="submit" disabled={isCreatingSlot || !adminToken}>
-                    <PlusCircle size={16} aria-hidden="true" />
-                    Create slot
-                  </button>
-                </form>
-                <div className="admin-actions">
-                  <label>
-                    Inspect offer slots
-                    <select
-                      value={selectedAdminOfferId ?? ''}
-                      onChange={(event) => {
-                        const nextId = Number(event.target.value);
-                        setSelectedAdminOfferId(Number.isFinite(nextId) ? nextId : null);
-                      }}
-                    >
-                      <option value="">Select offer</option>
-                      {adminOfferOptions.map((offer) => (
-                        <option value={offer.id} key={offer.id}>
-                          {offer.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
                   <button
                     className="secondary-button"
                     type="button"
-                    onClick={() => selectedAdminOfferId && loadAdminSlots(selectedAdminOfferId)}
-                    disabled={!adminToken || !selectedAdminOfferId || isLoadingAdminSlots}
+                    onClick={() => loadAdminData()}
+                    disabled={isLoadingAdmin}
                   >
-                    Load slots
+                    Refresh admin data
                   </button>
+                  <form className="admin-form" onSubmit={submitAdminOffer}>
+                    <label>
+                      Name
+                      <input
+                        type="text"
+                        value={offerForm.name}
+                        onChange={(event) => setOfferForm((current) => ({ ...current, name: event.target.value }))}
+                        maxLength={255}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Image URL
+                      <input
+                        type="url"
+                        value={offerForm.imageUrl}
+                        onChange={(event) => setOfferForm((current) => ({ ...current, imageUrl: event.target.value }))}
+                        maxLength={2048}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Description
+                      <textarea
+                        value={offerForm.description}
+                        onChange={(event) =>
+                          setOfferForm((current) => ({ ...current, description: event.target.value }))
+                        }
+                        maxLength={2048}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Price
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={offerForm.price}
+                        onChange={(event) => setOfferForm((current) => ({ ...current, price: event.target.value }))}
+                        required
+                      />
+                    </label>
+                    <button className="primary-button" type="submit" disabled={isCreatingOffer}>
+                      <PlusCircle size={16} aria-hidden="true" />
+                      Create offer
+                    </button>
+                  </form>
                 </div>
-                <div className="slots-list">
-                  {adminSlots.length === 0 ? <EmptyState label="No slots loaded" /> : null}
-                  {adminSlots.map((slot) => (
-                    <article className="slot-card" key={slot.id}>
-                      <div>
-                        <strong>#{slot.id}</strong>
-                        <span>{formatDateTime(slot.startsAt)}</span>
-                      </div>
-                      <span className={`status-pill ${slot.status.toLowerCase()}`}>{slot.status}</span>
-                    </article>
-                  ))}
-                </div>
-              </div>
 
-              <div className="panel admin-card">
-                <div className="panel-header">
-                  <h2>
-                    <TicketCheck size={16} aria-hidden="true" />
-                    Reservations
-                  </h2>
-                  <span className="tag">{adminReservations.length} total</span>
+                <div className="panel admin-card">
+                  <div className="panel-header">
+                    <h2>
+                      <CalendarDays size={16} aria-hidden="true" />
+                      Availability slots
+                    </h2>
+                    <span className="tag">{adminSlots.length} slots</span>
+                  </div>
+                  <form className="admin-form" onSubmit={submitAdminSlot}>
+                    <label>
+                      Offer
+                      <select
+                        value={slotForm.offerId}
+                        onChange={(event) => setSlotForm((current) => ({ ...current, offerId: event.target.value }))}
+                        required
+                      >
+                        <option value="">Select offer</option>
+                        {adminOfferOptions.map((offer) => (
+                          <option value={offer.id} key={offer.id}>
+                            {offer.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Starts
+                      <input
+                        type="datetime-local"
+                        value={slotForm.startsAt}
+                        onChange={(event) => setSlotForm((current) => ({ ...current, startsAt: event.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Ends
+                      <input
+                        type="datetime-local"
+                        value={slotForm.endsAt}
+                        onChange={(event) => setSlotForm((current) => ({ ...current, endsAt: event.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Capacity
+                      <input
+                        type="number"
+                        min="1"
+                        value={slotForm.capacity}
+                        onChange={(event) => setSlotForm((current) => ({ ...current, capacity: event.target.value }))}
+                        required
+                      />
+                    </label>
+                    <button className="primary-button" type="submit" disabled={isCreatingSlot}>
+                      <PlusCircle size={16} aria-hidden="true" />
+                      Create slot
+                    </button>
+                  </form>
+                  <div className="admin-actions">
+                    <label>
+                      Inspect offer slots
+                      <select
+                        value={selectedAdminOfferId ?? ''}
+                        onChange={(event) => {
+                          const nextId = Number(event.target.value);
+                          setSelectedAdminOfferId(Number.isFinite(nextId) ? nextId : null);
+                        }}
+                      >
+                        <option value="">Select offer</option>
+                        {adminOfferOptions.map((offer) => (
+                          <option value={offer.id} key={offer.id}>
+                            {offer.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => selectedAdminOfferId && loadAdminSlots(selectedAdminOfferId)}
+                      disabled={!selectedAdminOfferId || isLoadingAdminSlots}
+                    >
+                      Load slots
+                    </button>
+                  </div>
+                  <div className="slots-list">
+                    {adminSlots.length === 0 ? <EmptyState label="No slots loaded" /> : null}
+                    {adminSlots.map((slot) => (
+                      <article className="slot-card" key={slot.id}>
+                        <div>
+                          <strong>#{slot.id}</strong>
+                          <span>{formatDateTime(slot.startsAt)}</span>
+                        </div>
+                        <span className={`status-pill ${slot.status.toLowerCase()}`}>{slot.status}</span>
+                      </article>
+                    ))}
+                  </div>
                 </div>
-                <div className="slots-list">
-                  {adminReservations.length === 0 ? <EmptyState label="No reservations loaded" /> : null}
-                  {adminReservations.map((reservation) => (
-                    <article className="slot-card" key={reservation.id}>
-                      <div>
-                        <strong>#{reservation.id}</strong>
-                        <span>{reservation.customerEmail}</span>
-                      </div>
-                      <span className={`status-pill ${reservation.status.toLowerCase()}`}>{reservation.status}</span>
-                    </article>
-                  ))}
+
+                <div className="panel admin-card">
+                  <div className="panel-header">
+                    <h2>
+                      <TicketCheck size={16} aria-hidden="true" />
+                      Reservations
+                    </h2>
+                    <span className="tag">{adminReservations.length} total</span>
+                  </div>
+                  <div className="slots-list">
+                    {adminReservations.length === 0 ? <EmptyState label="No reservations loaded" /> : null}
+                    {adminReservations.map((reservation) => (
+                      <article className="slot-card reservation-row" key={reservation.id}>
+                        <div>
+                          <strong>#{reservation.id}</strong>
+                          <span>{reservation.customerEmail}</span>
+                        </div>
+                        <div className="reservation-actions">
+                          <span className={`status-pill ${reservation.status.toLowerCase()}`}>
+                            {reservation.status}
+                          </span>
+                          {reservation.status === 'PENDING' ? (
+                            <div className="button-row">
+                              <button
+                                className="primary-button"
+                                type="button"
+                                onClick={() => confirmAdminReservation(reservation.id)}
+                                disabled={reservationActionId === reservation.id}
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                className="secondary-button"
+                                type="button"
+                                onClick={() => rejectAdminReservation(reservation.id)}
+                                disabled={reservationActionId === reservation.id}
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </section>
       )}
 
@@ -916,7 +988,7 @@ export function App() {
                 reservations.
               </p>
               <div className="hero-actions">
-                <button className="primary-button" type="button" onClick={() => setScreen('auth')}>
+                <button className="primary-button" type="button" onClick={() => navigate('auth')}>
                   <LogIn size={16} aria-hidden="true" />
                   Login / Register
                 </button>
@@ -932,7 +1004,7 @@ export function App() {
               </div>
               <div className="hero-badge">
                 <ShieldCheck size={16} aria-hidden="true" />
-                <span>{isAdminPort ? `Admin port: ${apiConfig.adminPort}` : 'Admin port locked'}</span>
+                <span>Admin panel: /admin</span>
               </div>
               {customerToken ? (
                 <button className="secondary-button" type="button" onClick={handleLogout}>
@@ -1067,7 +1139,7 @@ export function App() {
                 {!customerToken && (
                   <p className="helper">
                     Please login first. Go to{' '}
-                    <button className="link-button" type="button" onClick={() => setScreen('auth')}>
+                    <button className="link-button" type="button" onClick={() => navigate('auth')}>
                       Login / Register
                     </button>
                     .
@@ -1097,7 +1169,10 @@ export function App() {
                     className="secondary-button"
                     type="button"
                     onClick={cancelLastReservation}
-                    disabled={isSubmittingReservation || lastReservation.status === 'CANCELLED'}
+                    disabled={
+                      isSubmittingReservation ||
+                      (lastReservation.status !== 'PENDING' && lastReservation.status !== 'CONFIRMED')
+                    }
                   >
                     <XCircle size={18} aria-hidden="true" />
                     Cancel

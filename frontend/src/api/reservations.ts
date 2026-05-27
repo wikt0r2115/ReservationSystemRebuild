@@ -25,3 +25,23 @@ export function listAdminReservations(accessToken: string): Promise<Reservation[
     accessToken,
   });
 }
+
+export function confirmReservation(reservationId: number, accessToken: string): Promise<Reservation> {
+  return requestJson<Reservation>(
+    `${apiConfig.bookingBaseUrl}/api/v1/admin/reservations/${reservationId}/confirm`,
+    {
+      method: 'POST',
+      accessToken,
+    },
+  );
+}
+
+export function rejectReservation(reservationId: number, accessToken: string): Promise<Reservation> {
+  return requestJson<Reservation>(
+    `${apiConfig.bookingBaseUrl}/api/v1/admin/reservations/${reservationId}/reject`,
+    {
+      method: 'POST',
+      accessToken,
+    },
+  );
+}

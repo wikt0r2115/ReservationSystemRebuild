@@ -43,6 +43,10 @@ class SharedDatabaseFlywayMigrationTest {
                     .isEqualTo("true");
             assertThat(application.getProperty("spring.flyway.baseline-version"))
                     .isEqualTo("0");
+            assertThat(postgres.getProperty("spring.flyway.baseline-on-migrate"))
+                    .isEqualTo("true");
+            assertThat(postgres.getProperty("spring.flyway.baseline-version"))
+                    .isEqualTo("0");
 
             String location = application.getProperty("spring.flyway.locations");
             assertThat(location).isEqualTo("classpath:db/migration/" + module.name());
@@ -51,8 +55,8 @@ class SharedDatabaseFlywayMigrationTest {
                     .dataSource(jdbcUrl, "sa", "")
                     .locations(toFilesystemLocation(module.modulePath(), location))
                     .table(postgres.getProperty("spring.flyway.table"))
-                    .baselineOnMigrate(Boolean.parseBoolean(application.getProperty("spring.flyway.baseline-on-migrate")))
-                    .baselineVersion(application.getProperty("spring.flyway.baseline-version"))
+                    .baselineOnMigrate(Boolean.parseBoolean(postgres.getProperty("spring.flyway.baseline-on-migrate")))
+                    .baselineVersion(postgres.getProperty("spring.flyway.baseline-version"))
                     .load()
                     .migrate();
         }

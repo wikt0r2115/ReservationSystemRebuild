@@ -19,7 +19,7 @@ export type AvailabilitySlot = {
   status: AvailabilityStatus;
 };
 
-export type ReservationStatus = 'CONFIRMED' | 'CANCELLED';
+export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'CANCELLED';
 
 export type Reservation = {
   id: number;
