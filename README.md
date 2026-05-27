@@ -126,6 +126,20 @@ The Vite dev server starts on:
 http://localhost:5173
 ```
 
+Admin panel is available only on the admin port:
+
+```bash
+cd frontend
+npm run dev:admin
+```
+
+```text
+http://localhost:5174
+```
+
+The admin UI is hidden when the app is served on any other port. The port can be
+overridden with `VITE_ADMIN_PORT`.
+
 During local development the frontend proxies API traffic through these
 prefixes, so the backend modules should be running on their default ports:
 

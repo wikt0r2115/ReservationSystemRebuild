@@ -1,23 +1,20 @@
 import {
-  AlertCircle,
   CalendarDays,
   CheckCircle2,
   ClipboardList,
-  Clock3,
+  DoorOpen,
+  LayoutDashboard,
+  Lock,
+  LogIn,
+  LogOut,
   PlusCircle,
-  RefreshCw,
   ShieldCheck,
   TicketCheck,
   UserRound,
   XCircle,
 } from 'lucide-react';
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
-import {
-  cancelAvailabilitySlot,
-  createAvailabilitySlot,
-  listAdminSlots,
-  listOpenSlots,
-} from './api/availability';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { createAvailabilitySlot, listAdminSlots, listOpenSlots } from './api/availability';
 import { login, registerCustomer } from './api/auth';
 import { ApiRequestError } from './api/client';
 import { createOffer, listActiveOffers, listAdminOffers } from './api/offers';
@@ -31,12 +28,11 @@ import type {
   CreateReservationPayload,
   LoginCredentials,
   Offer,
+  RegisterCustomerPayload,
   Reservation,
 } from './types';
 
-type CustomerAuthFormState = LoginCredentials & {
-  displayName: string;
-};
+type Screen = 'landing' | 'auth' | 'admin';
 
 type ReservationFormState = {
   customerName: string;
@@ -71,7 +67,11 @@ const emptyOfferForm: OfferFormState = {
   price: '100.00',
 };
 
+const CUSTOMER_TOKEN_KEY = 'reservation.customer.token';
+const ADMIN_TOKEN_KEY = 'reservation.admin.token';
+
 export function App() {
+  const [screen, setScreen] = useState<Screen>('landing');
   const [offers, setOffers] = useState<Offer[]>([]);
   const [selectedOfferId, setSelectedOfferId] = useState<number | null>(null);
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
@@ -84,28 +84,36 @@ export function App() {
   const [adminOffers, setAdminOffers] = useState<Offer[]>([]);
   const [adminSlots, setAdminSlots] = useState<AvailabilitySlot[]>([]);
   const [selectedAdminOfferId, setSelectedAdminOfferId] = useState<number | null>(null);
-  const [customerAuthForm, setCustomerAuthForm] = useState<CustomerAuthFormState>({
-    displayName: 'Jan Kowalski',
+  const [customerAuthForm, setCustomerAuthForm] = useState<RegisterCustomerPayload>({
+    displayName: '',
     email: apiConfig.customerEmail,
     password: apiConfig.customerPassword,
   });
-  const [customerToken, setCustomerToken] = useState<string | null>(null);
-  const [adminCredentials, setAdminCredentials] = useState<LoginCredentials>({
+  const [customerLoginForm, setCustomerLoginForm] = useState<LoginCredentials>({
+    email: apiConfig.customerEmail,
+    password: apiConfig.customerPassword,
+  });
+  const [adminLoginForm, setAdminLoginForm] = useState<LoginCredentials>({
     email: apiConfig.adminEmail,
     password: apiConfig.adminPassword,
   });
-  const [adminToken, setAdminToken] = useState<string | null>(null);
+  const [customerToken, setCustomerToken] = useState<string | null>(
+    () => localStorage.getItem(CUSTOMER_TOKEN_KEY),
+  );
+  const [adminToken, setAdminToken] = useState<string | null>(() => localStorage.getItem(ADMIN_TOKEN_KEY));
   const [isLoadingOffers, setIsLoadingOffers] = useState(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
-  const [isCustomerAuthLoading, setIsCustomerAuthLoading] = useState(false);
   const [isSubmittingReservation, setIsSubmittingReservation] = useState(false);
-  const [isAdminAuthLoading, setIsAdminAuthLoading] = useState(false);
   const [isLoadingAdmin, setIsLoadingAdmin] = useState(false);
   const [isLoadingAdminSlots, setIsLoadingAdminSlots] = useState(false);
   const [isCreatingOffer, setIsCreatingOffer] = useState(false);
   const [isCreatingSlot, setIsCreatingSlot] = useState(false);
-  const [cancellingSlotId, setCancellingSlotId] = useState<number | null>(null);
+  const [isCustomerAuthLoading, setIsCustomerAuthLoading] = useState(false);
+  const [isAdminAuthLoading, setIsAdminAuthLoading] = useState(false);
   const [error, setError] = useState<ApiErrorResponse | null>(null);
+  const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
+
+  const isAdminPort = window.location.port === apiConfig.adminPort;
 
   const selectedOffer = useMemo(
     () => offers.find((offer) => offer.id === selectedOfferId) ?? null,
@@ -117,12 +125,12 @@ export function App() {
     [slots, selectedSlotId],
   );
 
+  const selectedSlotRemaining = selectedSlot ? selectedSlot.capacity - selectedSlot.reservedCount : 0;
+
   const adminOfferOptions = useMemo(
     () => (adminOffers.length > 0 ? adminOffers : offers),
     [adminOffers, offers],
   );
-
-  const selectedSlotRemaining = selectedSlot ? selectedSlot.capacity - selectedSlot.reservedCount : 0;
 
   useEffect(() => {
     void loadOffers();
@@ -143,8 +151,33 @@ export function App() {
       return;
     }
 
-    setSlotForm((current) => ({ ...current, offerId: String(selectedOfferId) }));
+    setSlotForm((current) => ({
+      ...current,
+      offerId: String(selectedOfferId),
+    }));
   }, [selectedOfferId]);
+
+  useEffect(() => {
+    if (customerToken) {
+      localStorage.setItem(CUSTOMER_TOKEN_KEY, customerToken);
+    } else {
+      localStorage.removeItem(CUSTOMER_TOKEN_KEY);
+    }
+  }, [customerToken]);
+
+  useEffect(() => {
+    if (adminToken) {
+      localStorage.setItem(ADMIN_TOKEN_KEY, adminToken);
+    } else {
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
+    }
+  }, [adminToken]);
+
+  useEffect(() => {
+    if (screen === 'admin' && !isAdminPort) {
+      setScreen('landing');
+    }
+  }, [screen, isAdminPort]);
 
   async function loadOffers() {
     setIsLoadingOffers(true);
@@ -152,9 +185,7 @@ export function App() {
     try {
       const loadedOffers = await listActiveOffers();
       setOffers(loadedOffers);
-      setSelectedOfferId((current) =>
-        loadedOffers.some((offer) => offer.id === current) ? current : loadedOffers[0]?.id ?? null,
-      );
+      setSelectedOfferId((current) => current ?? loadedOffers[0]?.id ?? null);
     } catch (caught) {
       setError(toApiError(caught));
     } finally {
@@ -168,7 +199,7 @@ export function App() {
     try {
       const loadedSlots = await listOpenSlots(offerId);
       setSlots(loadedSlots);
-      setSelectedSlotId(loadedSlots[0]?.id ?? null);
+      setSelectedSlotId((current) => current ?? loadedSlots[0]?.id ?? null);
     } catch (caught) {
       setError(toApiError(caught));
     } finally {
@@ -176,75 +207,29 @@ export function App() {
     }
   }
 
-  async function registerCustomerAccount() {
-    setIsCustomerAuthLoading(true);
-    setError(null);
-    try {
-      await registerCustomer(customerAuthForm);
-      await createCustomerSession();
-    } catch (caught) {
-      setError(toApiError(caught));
-    } finally {
-      setIsCustomerAuthLoading(false);
-    }
-  }
-
-  async function loginCustomerAccount() {
-    setIsCustomerAuthLoading(true);
-    setError(null);
-    try {
-      await createCustomerSession();
-    } catch (caught) {
-      setError(toApiError(caught));
-    } finally {
-      setIsCustomerAuthLoading(false);
-    }
-  }
-
-  async function createCustomerSession() {
-    const token = await login({
-      email: customerAuthForm.email,
-      password: customerAuthForm.password,
-    });
-    setCustomerToken(token.token);
-    setReservationForm((current) => ({
-      ...current,
-      customerName: current.customerName || customerAuthForm.displayName,
-      customerEmail: current.customerEmail || customerAuthForm.email,
-    }));
-  }
-
-  async function loginAdminAndLoad() {
-    setIsAdminAuthLoading(true);
-    setError(null);
-    try {
-      const token = await login(adminCredentials);
-      setAdminToken(token.token);
-      await loadAdminData(token.token);
-    } catch (caught) {
-      setError(toApiError(caught));
-    } finally {
-      setIsAdminAuthLoading(false);
-    }
-  }
-
   async function submitReservation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedSlot) {
+
+    const accessToken = requireAccessToken(customerToken);
+    if (!accessToken) {
       setError({
-        code: 'SLOT_REQUIRED',
-        message: 'Availability slot is required',
+        code: 'CUSTOMER_LOGIN_REQUIRED',
+        message: 'Customer login is required',
         details: [],
       });
       return;
     }
 
-    const accessToken = requireAccessToken(
-      customerToken,
-      'CUSTOMER_LOGIN_REQUIRED',
-      'Customer login is required',
-    );
-    if (!accessToken) {
+    if (!selectedSlot) {
+      return;
+    }
+
+    if (selectedSlotRemaining <= 0) {
+      setError({
+        code: 'NO_CAPACITY',
+        message: 'Selected slot has no capacity left',
+        details: [],
+      });
       return;
     }
 
@@ -261,9 +246,6 @@ export function App() {
       const reservation = await createReservation(payload, accessToken);
       setLastReservation(reservation);
       setReservationForm(emptyReservationForm);
-      if (selectedOfferId !== null) {
-        await loadSlots(selectedOfferId);
-      }
     } catch (caught) {
       setError(toApiError(caught));
     } finally {
@@ -276,30 +258,36 @@ export function App() {
       return;
     }
 
-    const accessToken = requireAccessToken(
-      customerToken,
-      'CUSTOMER_LOGIN_REQUIRED',
-      'Customer login is required',
-    );
+    const accessToken = requireAccessToken(customerToken);
     if (!accessToken) {
+      setError({
+        code: 'CUSTOMER_LOGIN_REQUIRED',
+        message: 'Customer login is required',
+        details: [],
+      });
       return;
     }
 
+    setIsSubmittingReservation(true);
     setError(null);
     try {
       const reservation = await cancelReservation(lastReservation.id, accessToken);
       setLastReservation(reservation);
-      if (selectedOfferId !== null) {
-        await loadSlots(selectedOfferId);
-      }
     } catch (caught) {
       setError(toApiError(caught));
+    } finally {
+      setIsSubmittingReservation(false);
     }
   }
 
   async function loadAdminData(token = adminToken) {
-    const accessToken = requireAccessToken(token, 'ADMIN_LOGIN_REQUIRED', 'Admin login is required');
+    const accessToken = requireAccessToken(token);
     if (!accessToken) {
+      setError({
+        code: 'ADMIN_LOGIN_REQUIRED',
+        message: 'Admin login is required',
+        details: [],
+      });
       return;
     }
 
@@ -312,10 +300,6 @@ export function App() {
       ]);
       setAdminReservations(reservations);
       setAdminOffers(allOffers);
-      setSelectedAdminOfferId((current) =>
-        allOffers.some((offer) => offer.id === current) ? current : allOffers[0]?.id ?? null,
-      );
-      setAdminSlots([]);
     } catch (caught) {
       setError(toApiError(caught));
     } finally {
@@ -324,8 +308,13 @@ export function App() {
   }
 
   async function loadAdminSlots(offerId: number, token = adminToken) {
-    const accessToken = requireAccessToken(token, 'ADMIN_LOGIN_REQUIRED', 'Admin login is required');
+    const accessToken = requireAccessToken(token);
     if (!accessToken) {
+      setError({
+        code: 'ADMIN_LOGIN_REQUIRED',
+        message: 'Admin login is required',
+        details: [],
+      });
       return;
     }
 
@@ -341,32 +330,16 @@ export function App() {
     }
   }
 
-  async function cancelAdminSlot(slot: AvailabilitySlot) {
-    const accessToken = requireAccessToken(adminToken, 'ADMIN_LOGIN_REQUIRED', 'Admin login is required');
-    if (!accessToken) {
-      return;
-    }
-
-    setCancellingSlotId(slot.id);
-    setError(null);
-    try {
-      const cancelledSlot = await cancelAvailabilitySlot(slot.id, accessToken);
-      setAdminSlots((current) => current.map((item) => (item.id === cancelledSlot.id ? cancelledSlot : item)));
-      if (selectedOfferId === slot.offerId) {
-        await loadSlots(slot.offerId);
-      }
-    } catch (caught) {
-      setError(toApiError(caught));
-    } finally {
-      setCancellingSlotId(null);
-    }
-  }
-
   async function submitAdminOffer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const accessToken = requireAccessToken(adminToken, 'ADMIN_LOGIN_REQUIRED', 'Admin login is required');
+    const accessToken = requireAccessToken(adminToken);
     if (!accessToken) {
+      setError({
+        code: 'ADMIN_LOGIN_REQUIRED',
+        message: 'Admin login is required',
+        details: [],
+      });
       return;
     }
 
@@ -385,8 +358,6 @@ export function App() {
       setAdminOffers((current) => [offer, ...current.filter((item) => item.id !== offer.id)]);
       setOffers((current) => [offer, ...current.filter((item) => item.id !== offer.id)]);
       setSelectedOfferId(offer.id);
-      setSelectedAdminOfferId(offer.id);
-      setAdminSlots([]);
       setSlotForm((current) => ({ ...current, offerId: String(offer.id) }));
     } catch (caught) {
       setError(toApiError(caught));
@@ -398,16 +369,21 @@ export function App() {
   async function submitAdminSlot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const accessToken = requireAccessToken(adminToken, 'ADMIN_LOGIN_REQUIRED', 'Admin login is required');
+    const accessToken = requireAccessToken(adminToken);
     if (!accessToken) {
+      setError({
+        code: 'ADMIN_LOGIN_REQUIRED',
+        message: 'Admin login is required',
+        details: [],
+      });
       return;
     }
 
     const offerId = Number(slotForm.offerId);
     if (!Number.isFinite(offerId) || offerId <= 0) {
       setError({
-        code: 'OFFER_REQUIRED',
-        message: 'Offer is required',
+        code: 'INVALID_OFFER',
+        message: 'Select an offer for availability slot',
         details: [],
       });
       return;
@@ -423,508 +399,716 @@ export function App() {
     setError(null);
     try {
       const slot = await createAvailabilitySlot(offerId, payload, accessToken);
-      setSelectedOfferId(offerId);
-      setSlotForm({ ...createDefaultSlotForm(), offerId: String(offerId) });
-      await loadSlots(offerId);
-      if (selectedAdminOfferId === offerId) {
-        await loadAdminSlots(offerId, accessToken);
-      }
-      setSelectedSlotId(slot.id);
+      setSlotForm(createDefaultSlotForm(offerId));
+      setAdminSlots((current) => [slot, ...current.filter((item) => item.id !== slot.id)]);
+      setSelectedAdminOfferId(offerId);
     } catch (caught) {
-      setError(toCreateSlotError(caught));
+      setError(toApiError(caught));
     } finally {
       setIsCreatingSlot(false);
     }
   }
 
-  function requireAccessToken(accessToken: string | null, code: string, message: string): string | null {
-    if (accessToken) {
-      return accessToken;
+  async function submitCustomerRegister(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsCustomerAuthLoading(true);
+    setError(null);
+    try {
+      await registerCustomer(customerAuthForm);
+      const token = await login({ email: customerAuthForm.email, password: customerAuthForm.password });
+      setCustomerToken(token.token);
+      setReservationForm((current) => ({
+        ...current,
+        customerName: current.customerName || customerAuthForm.displayName,
+        customerEmail: current.customerEmail || customerAuthForm.email,
+      }));
+      setScreen('landing');
+      setAuthTab('login');
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setIsCustomerAuthLoading(false);
     }
+  }
 
-    setError({
-      code,
-      message,
-      details: [],
-    });
-    return null;
+  async function submitCustomerLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsCustomerAuthLoading(true);
+    setError(null);
+    try {
+      const token = await login(customerLoginForm);
+      setCustomerToken(token.token);
+      setReservationForm((current) => ({
+        ...current,
+        customerEmail: current.customerEmail || customerLoginForm.email,
+      }));
+      setScreen('landing');
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setIsCustomerAuthLoading(false);
+    }
+  }
+
+  async function submitAdminLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsAdminAuthLoading(true);
+    setError(null);
+    try {
+      const token = await login(adminLoginForm);
+      setAdminToken(token.token);
+      await loadAdminData(token.token);
+      setScreen('admin');
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setIsAdminAuthLoading(false);
+    }
+  }
+
+  function handleLogout() {
+    setCustomerToken(null);
+    setLastReservation(null);
+  }
+
+  function handleAdminLogout() {
+    setAdminToken(null);
+    setAdminReservations([]);
+    setAdminOffers([]);
+    setAdminSlots([]);
   }
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Reservation System</p>
-          <h1>Operations Console</h1>
+      <header className="nav">
+        <div className="logo">
+          <span className="logo-mark">
+            <ClipboardList size={18} aria-hidden="true" />
+          </span>
+          <div>
+            <span className="logo-title">Reservation System</span>
+            <span className="logo-subtitle">Simple booking for curated offers</span>
+          </div>
         </div>
-        <button className="icon-button" type="button" onClick={loadOffers} disabled={isLoadingOffers}>
-          <RefreshCw size={18} aria-hidden="true" />
-          Refresh
-        </button>
+        <div className="nav-actions">
+          <button className="ghost-button" type="button" onClick={() => setScreen('landing')}>
+            <DoorOpen size={16} aria-hidden="true" />
+            Landing
+          </button>
+          <button className="ghost-button" type="button" onClick={() => setScreen('auth')}>
+            <LogIn size={16} aria-hidden="true" />
+            Login / Register
+          </button>
+          {isAdminPort ? (
+            <button className="ghost-button" type="button" onClick={() => setScreen('admin')}>
+              <LayoutDashboard size={16} aria-hidden="true" />
+              Admin
+            </button>
+          ) : null}
+        </div>
       </header>
 
       {error && <ErrorBanner error={error} />}
 
-      <section className="workspace" aria-label="Reservation workspace">
-        <section className="panel offers-panel" aria-labelledby="offers-heading">
-          <PanelHeader
-            icon={<ClipboardList size={18} aria-hidden="true" />}
-            title="Offers"
-            meta={isLoadingOffers ? 'Loading' : `${offers.length}`}
-          />
-          <div className="offer-list">
-            {offers.length === 0 && !isLoadingOffers ? <EmptyState label="No active offers" /> : null}
-            {offers.map((offer) => (
-              <button
-                className={`offer-card ${selectedOfferId === offer.id ? 'selected' : ''}`}
-                type="button"
-                key={offer.id}
-                onClick={() => setSelectedOfferId(offer.id)}
-              >
-                <img src={offer.imageUrl} alt="" />
-                <span className="offer-copy">
-                  <strong>{offer.name}</strong>
-                  <small>{formatCurrency(offer.price)}</small>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel slots-panel" aria-labelledby="slots-heading">
-          <PanelHeader
-            icon={<CalendarDays size={18} aria-hidden="true" />}
-            title={selectedOffer?.name ?? 'Availability'}
-            meta={isLoadingSlots ? 'Loading' : `${slots.length}`}
-          />
-          <div className="slot-list">
-            {slots.length === 0 && !isLoadingSlots ? <EmptyState label="No open slots" /> : null}
-            {slots.map((slot) => (
-              <button
-                className={`slot-card ${selectedSlotId === slot.id ? 'selected' : ''}`}
-                type="button"
-                key={slot.id}
-                onClick={() => setSelectedSlotId(slot.id)}
-              >
-                <span className="slot-main">
-                  <Clock3 size={16} aria-hidden="true" />
-                  <span>{formatDateTime(slot.startsAt)}</span>
-                </span>
-                <span className="slot-meta">
-                  {slot.capacity - slot.reservedCount}/{slot.capacity}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel booking-panel" aria-labelledby="booking-heading">
-          <PanelHeader
-            icon={<TicketCheck size={18} aria-hidden="true" />}
-            title="Booking"
-            meta={selectedSlot ? `Slot ${selectedSlot.id}` : 'No slot'}
-          />
-          <div className="auth-box">
-            <div className="auth-status">
-              <UserRound size={16} aria-hidden="true" />
-              <span>{customerToken ? 'Customer token active' : 'Customer login required'}</span>
+      {screen === 'auth' && (
+        <section className="auth-screen">
+          <div className="auth-card">
+            <div className="auth-header">
+              <div>
+                <p className="eyebrow">Access</p>
+                <h1>Login or register</h1>
+                <p className="helper">Authenticate to create and manage reservations.</p>
+              </div>
+              <span className="tag">Auth module: {apiConfig.authBaseUrl}</span>
             </div>
-            <label>
-              Display name
-              <input
-                type="text"
-                value={customerAuthForm.displayName}
-                onChange={(event) =>
-                  setCustomerAuthForm((current) => ({ ...current, displayName: event.target.value }))
-                }
-                autoComplete="name"
-                maxLength={100}
-              />
-            </label>
-            <label>
-              Email
-              <input
-                type="email"
-                value={customerAuthForm.email}
-                onChange={(event) =>
-                  setCustomerAuthForm((current) => ({ ...current, email: event.target.value }))
-                }
-                autoComplete="email"
-              />
-            </label>
-            <label>
-              Password
-              <input
-                type="password"
-                value={customerAuthForm.password}
-                onChange={(event) =>
-                  setCustomerAuthForm((current) => ({ ...current, password: event.target.value }))
-                }
-                autoComplete="current-password"
-              />
-            </label>
-            <div className="button-row">
+
+            <div className="auth-tabs">
               <button
-                className="secondary-button"
+                className={`tab-button ${authTab === 'login' ? 'active' : ''}`}
                 type="button"
-                onClick={() => void registerCustomerAccount()}
-                disabled={isCustomerAuthLoading}
+                onClick={() => setAuthTab('login')}
               >
-                <UserRound size={18} aria-hidden="true" />
-                Register
-              </button>
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => void loginCustomerAccount()}
-                disabled={isCustomerAuthLoading}
-              >
-                <TicketCheck size={18} aria-hidden="true" />
                 Login
               </button>
+              <button
+                className={`tab-button ${authTab === 'register' ? 'active' : ''}`}
+                type="button"
+                onClick={() => setAuthTab('register')}
+              >
+                Register
+              </button>
+            </div>
+
+            <div className="auth-grid">
+              {authTab === 'login' ? (
+                <form className="auth-form" onSubmit={submitCustomerLogin}>
+                  <label>
+                    Email
+                    <input
+                      type="email"
+                      value={customerLoginForm.email}
+                      onChange={(event) =>
+                        setCustomerLoginForm((current) => ({ ...current, email: event.target.value }))
+                      }
+                      required
+                    />
+                  </label>
+                  <label>
+                    Password
+                    <input
+                      type="password"
+                      value={customerLoginForm.password}
+                      onChange={(event) =>
+                        setCustomerLoginForm((current) => ({ ...current, password: event.target.value }))
+                      }
+                      required
+                    />
+                  </label>
+                  <button className="primary-button" type="submit" disabled={isCustomerAuthLoading}>
+                    <LogIn size={16} aria-hidden="true" />
+                    Login as customer
+                  </button>
+                </form>
+              ) : (
+                <form className="auth-form" onSubmit={submitCustomerRegister}>
+                  <label>
+                    Display name
+                    <input
+                      type="text"
+                      value={customerAuthForm.displayName}
+                      onChange={(event) =>
+                        setCustomerAuthForm((current) => ({ ...current, displayName: event.target.value }))
+                      }
+                      minLength={2}
+                      maxLength={100}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Email
+                    <input
+                      type="email"
+                      value={customerAuthForm.email}
+                      onChange={(event) =>
+                        setCustomerAuthForm((current) => ({ ...current, email: event.target.value }))
+                      }
+                      required
+                    />
+                  </label>
+                  <label>
+                    Password
+                    <input
+                      type="password"
+                      value={customerAuthForm.password}
+                      onChange={(event) =>
+                        setCustomerAuthForm((current) => ({ ...current, password: event.target.value }))
+                      }
+                      minLength={8}
+                      maxLength={72}
+                      required
+                    />
+                  </label>
+                  <button className="primary-button" type="submit" disabled={isCustomerAuthLoading}>
+                    <UserRound size={16} aria-hidden="true" />
+                    Create account
+                  </button>
+                </form>
+              )}
+
+              {isAdminPort ? (
+                <div className="auth-divider">
+                  <span>Admin access</span>
+                  <form className="auth-form" onSubmit={submitAdminLogin}>
+                    <label>
+                      Admin email
+                      <input
+                        type="email"
+                        value={adminLoginForm.email}
+                        onChange={(event) =>
+                          setAdminLoginForm((current) => ({ ...current, email: event.target.value }))
+                        }
+                        required
+                      />
+                    </label>
+                    <label>
+                      Admin password
+                      <input
+                        type="password"
+                        value={adminLoginForm.password}
+                        onChange={(event) =>
+                          setAdminLoginForm((current) => ({ ...current, password: event.target.value }))
+                        }
+                        required
+                      />
+                    </label>
+                    <button className="secondary-button" type="submit" disabled={isAdminAuthLoading}>
+                      <ShieldCheck size={16} aria-hidden="true" />
+                      Login as admin
+                    </button>
+                  </form>
+                </div>
+              ) : null}
             </div>
           </div>
-          <form className="reservation-form" onSubmit={submitReservation}>
-            <label>
-              Name
-              <input
-                type="text"
-                value={reservationForm.customerName}
-                onChange={(event) =>
-                  setReservationForm((current) => ({ ...current, customerName: event.target.value }))
-                }
-                autoComplete="name"
-                maxLength={255}
-                required
-              />
-            </label>
-            <label>
-              Email
-              <input
-                type="email"
-                value={reservationForm.customerEmail}
-                onChange={(event) =>
-                  setReservationForm((current) => ({ ...current, customerEmail: event.target.value }))
-                }
-                autoComplete="email"
-                maxLength={255}
-                required
-              />
-            </label>
-            <label>
-              Party size
-              <input
-                type="number"
-                min="1"
-                value={reservationForm.partySize}
-                onChange={(event) =>
-                  setReservationForm((current) => ({ ...current, partySize: event.target.value }))
-                }
-                max={selectedSlot ? selectedSlot.capacity - selectedSlot.reservedCount : undefined}
-                required
-              />
-            </label>
-            <button
-              className="primary-button"
-              type="submit"
-              disabled={isSubmittingReservation || !customerToken || !selectedSlot || selectedSlotRemaining <= 0}
-            >
-              <TicketCheck size={18} aria-hidden="true" />
-              Reserve
-            </button>
-          </form>
+        </section>
+      )}
 
-          {lastReservation && (
-            <div className="reservation-result">
-              <div className="result-heading">
-                <CheckCircle2 size={18} aria-hidden="true" />
-                <strong>Reservation #{lastReservation.id}</strong>
-              </div>
-              <dl>
-                <div>
-                  <dt>Status</dt>
-                  <dd>{lastReservation.status}</dd>
-                </div>
-                <div>
-                  <dt>Email</dt>
-                  <dd>{lastReservation.customerEmail}</dd>
-                </div>
-                <div>
-                  <dt>People</dt>
-                  <dd>{lastReservation.partySize}</dd>
-                </div>
-              </dl>
-              <button
-                className="secondary-button danger"
-                type="button"
-                onClick={cancelLastReservation}
-                disabled={!customerToken || lastReservation.status === 'CANCELLED'}
-              >
-                <XCircle size={18} aria-hidden="true" />
-                Cancel
+      {screen === 'admin' && (
+        <section className="admin-screen">
+          {!isAdminPort ? (
+            <div className="panel">
+              <h1>Admin panel is locked</h1>
+              <p className="helper">
+                Admin panel is available only on port <strong>{apiConfig.adminPort}</strong>.
+              </p>
+              <button className="secondary-button" type="button" onClick={() => setScreen('landing')}>
+                Back to landing
               </button>
+            </div>
+          ) : (
+            <div className="admin-grid">
+              <div className="panel admin-card">
+                <div className="panel-header">
+                  <h2>
+                    <ShieldCheck size={16} aria-hidden="true" />
+                    Admin access
+                  </h2>
+                  {adminToken ? (
+                    <span className="tag success">Admin token active</span>
+                  ) : (
+                    <span className="tag warning">Admin login required</span>
+                  )}
+                </div>
+                <form className="auth-form" onSubmit={submitAdminLogin}>
+                  <label>
+                    Admin email
+                    <input
+                      type="email"
+                      value={adminLoginForm.email}
+                      onChange={(event) =>
+                        setAdminLoginForm((current) => ({ ...current, email: event.target.value }))
+                      }
+                      required
+                    />
+                  </label>
+                  <label>
+                    Admin password
+                    <input
+                      type="password"
+                      value={adminLoginForm.password}
+                      onChange={(event) =>
+                        setAdminLoginForm((current) => ({ ...current, password: event.target.value }))
+                      }
+                      required
+                    />
+                  </label>
+                  <div className="button-row">
+                    <button className="primary-button" type="submit" disabled={isAdminAuthLoading}>
+                      <ShieldCheck size={16} aria-hidden="true" />
+                      Login
+                    </button>
+                    <button className="secondary-button" type="button" onClick={handleAdminLogout}>
+                      <LogOut size={16} aria-hidden="true" />
+                      Logout
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="panel admin-card">
+                <div className="panel-header">
+                  <h2>
+                    <ClipboardList size={16} aria-hidden="true" />
+                    Offers
+                  </h2>
+                  <span className="tag">{adminOffers.length} total</span>
+                </div>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => loadAdminData()}
+                  disabled={isLoadingAdmin || !adminToken}
+                >
+                  Refresh admin data
+                </button>
+                <form className="admin-form" onSubmit={submitAdminOffer}>
+                  <label>
+                    Name
+                    <input
+                      type="text"
+                      value={offerForm.name}
+                      onChange={(event) => setOfferForm((current) => ({ ...current, name: event.target.value }))}
+                      maxLength={255}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Image URL
+                    <input
+                      type="url"
+                      value={offerForm.imageUrl}
+                      onChange={(event) => setOfferForm((current) => ({ ...current, imageUrl: event.target.value }))}
+                      maxLength={2048}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Description
+                    <textarea
+                      value={offerForm.description}
+                      onChange={(event) =>
+                        setOfferForm((current) => ({ ...current, description: event.target.value }))
+                      }
+                      maxLength={2048}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Price
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={offerForm.price}
+                      onChange={(event) => setOfferForm((current) => ({ ...current, price: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <button className="primary-button" type="submit" disabled={isCreatingOffer || !adminToken}>
+                    <PlusCircle size={16} aria-hidden="true" />
+                    Create offer
+                  </button>
+                </form>
+              </div>
+
+              <div className="panel admin-card">
+                <div className="panel-header">
+                  <h2>
+                    <CalendarDays size={16} aria-hidden="true" />
+                    Availability slots
+                  </h2>
+                  <span className="tag">{adminSlots.length} slots</span>
+                </div>
+                <form className="admin-form" onSubmit={submitAdminSlot}>
+                  <label>
+                    Offer
+                    <select
+                      value={slotForm.offerId}
+                      onChange={(event) => setSlotForm((current) => ({ ...current, offerId: event.target.value }))}
+                      required
+                    >
+                      <option value="">Select offer</option>
+                      {adminOfferOptions.map((offer) => (
+                        <option value={offer.id} key={offer.id}>
+                          {offer.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Starts
+                    <input
+                      type="datetime-local"
+                      value={slotForm.startsAt}
+                      onChange={(event) => setSlotForm((current) => ({ ...current, startsAt: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Ends
+                    <input
+                      type="datetime-local"
+                      value={slotForm.endsAt}
+                      onChange={(event) => setSlotForm((current) => ({ ...current, endsAt: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Capacity
+                    <input
+                      type="number"
+                      min="1"
+                      value={slotForm.capacity}
+                      onChange={(event) => setSlotForm((current) => ({ ...current, capacity: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <button className="primary-button" type="submit" disabled={isCreatingSlot || !adminToken}>
+                    <PlusCircle size={16} aria-hidden="true" />
+                    Create slot
+                  </button>
+                </form>
+                <div className="admin-actions">
+                  <label>
+                    Inspect offer slots
+                    <select
+                      value={selectedAdminOfferId ?? ''}
+                      onChange={(event) => {
+                        const nextId = Number(event.target.value);
+                        setSelectedAdminOfferId(Number.isFinite(nextId) ? nextId : null);
+                      }}
+                    >
+                      <option value="">Select offer</option>
+                      {adminOfferOptions.map((offer) => (
+                        <option value={offer.id} key={offer.id}>
+                          {offer.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => selectedAdminOfferId && loadAdminSlots(selectedAdminOfferId)}
+                    disabled={!adminToken || !selectedAdminOfferId || isLoadingAdminSlots}
+                  >
+                    Load slots
+                  </button>
+                </div>
+                <div className="slots-list">
+                  {adminSlots.length === 0 ? <EmptyState label="No slots loaded" /> : null}
+                  {adminSlots.map((slot) => (
+                    <article className="slot-card" key={slot.id}>
+                      <div>
+                        <strong>#{slot.id}</strong>
+                        <span>{formatDateTime(slot.startsAt)}</span>
+                      </div>
+                      <span className={`status-pill ${slot.status.toLowerCase()}`}>{slot.status}</span>
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              <div className="panel admin-card">
+                <div className="panel-header">
+                  <h2>
+                    <TicketCheck size={16} aria-hidden="true" />
+                    Reservations
+                  </h2>
+                  <span className="tag">{adminReservations.length} total</span>
+                </div>
+                <div className="slots-list">
+                  {adminReservations.length === 0 ? <EmptyState label="No reservations loaded" /> : null}
+                  {adminReservations.map((reservation) => (
+                    <article className="slot-card" key={reservation.id}>
+                      <div>
+                        <strong>#{reservation.id}</strong>
+                        <span>{reservation.customerEmail}</span>
+                      </div>
+                      <span className={`status-pill ${reservation.status.toLowerCase()}`}>{reservation.status}</span>
+                    </article>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </section>
+      )}
 
-        <section className="panel admin-panel" aria-labelledby="admin-heading">
-          <PanelHeader
-            icon={<ShieldCheck size={18} aria-hidden="true" />}
-            title="Admin"
-            meta={`${adminReservations.length} reservations`}
-          />
-          <div className="admin-auth">
-            <div className="auth-status">
-              <ShieldCheck size={16} aria-hidden="true" />
-              <span>{adminToken ? 'Admin token active' : 'Admin login required'}</span>
+      {screen === 'landing' && (
+        <>
+          <section className="hero">
+            <div className="hero-copy">
+              <p className="eyebrow">Landing</p>
+              <h1>Pick an offer and reserve your spot.</h1>
+              <p className="helper">
+                Browse curated offers, choose a time slot, and book in a few clicks. Login is required for
+                reservations.
+              </p>
+              <div className="hero-actions">
+                <button className="primary-button" type="button" onClick={() => setScreen('auth')}>
+                  <LogIn size={16} aria-hidden="true" />
+                  Login / Register
+                </button>
+                <button className="secondary-button" type="button" onClick={loadOffers} disabled={isLoadingOffers}>
+                  Refresh offers
+                </button>
+              </div>
             </div>
-            <label>
-              Email
-              <input
-                type="email"
-                value={adminCredentials.email}
-                onChange={(event) =>
-                  setAdminCredentials((current) => ({ ...current, email: event.target.value }))
-                }
-                autoComplete="username"
-              />
-            </label>
-            <label>
-              Password
-              <input
-                type="password"
-                value={adminCredentials.password}
-                onChange={(event) =>
-                  setAdminCredentials((current) => ({ ...current, password: event.target.value }))
-                }
-                autoComplete="current-password"
-              />
-            </label>
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => void loginAdminAndLoad()}
-              disabled={isAdminAuthLoading || isLoadingAdmin}
-            >
-              <ShieldCheck size={18} aria-hidden="true" />
-              Login & load
-            </button>
-          </div>
-
-          <div className="admin-actions">
-            <form className="admin-section" onSubmit={submitAdminOffer}>
-              <h3>
-                <PlusCircle size={16} aria-hidden="true" />
-                Create offer
-              </h3>
-              <label>
-                Name
-                <input
-                  type="text"
-                  value={offerForm.name}
-                  onChange={(event) => setOfferForm((current) => ({ ...current, name: event.target.value }))}
-                  maxLength={255}
-                  required
-                />
-              </label>
-              <label>
-                Image URL
-                <input
-                  type="url"
-                  value={offerForm.imageUrl}
-                  onChange={(event) => setOfferForm((current) => ({ ...current, imageUrl: event.target.value }))}
-                  maxLength={2048}
-                  required
-                />
-              </label>
-              <label>
-                Description
-                <textarea
-                  value={offerForm.description}
-                  onChange={(event) =>
-                    setOfferForm((current) => ({ ...current, description: event.target.value }))
-                  }
-                  maxLength={2048}
-                  required
-                />
-              </label>
-              <label>
-                Price
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={offerForm.price}
-                  onChange={(event) => setOfferForm((current) => ({ ...current, price: event.target.value }))}
-                  required
-                />
-              </label>
-              <button className="primary-button" type="submit" disabled={isCreatingOffer || !adminToken}>
-                <PlusCircle size={18} aria-hidden="true" />
-                Create
-              </button>
-            </form>
-
-            <form className="admin-section" onSubmit={submitAdminSlot}>
-              <h3>
-                <CalendarDays size={16} aria-hidden="true" />
-                Create slot
-              </h3>
-              <label>
-                Offer
-                <select
-                  value={slotForm.offerId}
-                  onChange={(event) => setSlotForm((current) => ({ ...current, offerId: event.target.value }))}
-                  required
-                >
-                  <option value="">Select offer</option>
-                  {adminOfferOptions.map((offer) => (
-                    <option value={offer.id} key={offer.id}>
-                      {offer.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Starts
-                <input
-                  type="datetime-local"
-                  value={slotForm.startsAt}
-                  onChange={(event) => setSlotForm((current) => ({ ...current, startsAt: event.target.value }))}
-                  required
-                />
-              </label>
-              <label>
-                Ends
-                <input
-                  type="datetime-local"
-                  value={slotForm.endsAt}
-                  onChange={(event) => setSlotForm((current) => ({ ...current, endsAt: event.target.value }))}
-                  required
-                />
-              </label>
-              <label>
-                Capacity
-                <input
-                  type="number"
-                  min="1"
-                  value={slotForm.capacity}
-                  onChange={(event) => setSlotForm((current) => ({ ...current, capacity: event.target.value }))}
-                  required
-                />
-              </label>
-              <button className="primary-button" type="submit" disabled={isCreatingSlot || !adminToken}>
-                <PlusCircle size={18} aria-hidden="true" />
-                Create
-              </button>
-            </form>
-          </div>
-
-          <section className="admin-section" aria-labelledby="admin-slots-heading">
-            <h3 id="admin-slots-heading">
-              <CalendarDays size={16} aria-hidden="true" />
-              Slots
-            </h3>
-            <div className="admin-slot-toolbar">
-              <label>
-                Offer
-                <select
-                  value={selectedAdminOfferId ?? ''}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setSelectedAdminOfferId(value ? Number(value) : null);
-                    setAdminSlots([]);
-                  }}
-                >
-                  <option value="">Select offer</option>
-                  {adminOfferOptions.map((offer) => (
-                    <option value={offer.id} key={offer.id}>
-                      {offer.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                className="secondary-button"
-                type="button"
-                disabled={isLoadingAdminSlots || !adminToken || selectedAdminOfferId === null}
-                onClick={() => {
-                  if (selectedAdminOfferId !== null) {
-                    void loadAdminSlots(selectedAdminOfferId);
-                  }
-                }}
-              >
-                <RefreshCw size={18} aria-hidden="true" />
-                Load slots
-              </button>
-            </div>
-            <div className="reservation-list">
-              {adminSlots.length === 0 && !isLoadingAdminSlots ? <EmptyState label="No slots loaded" /> : null}
-              {adminSlots.map((slot) => (
-                <article className="reservation-row admin-slot-row" key={slot.id}>
-                  <div>
-                    <strong>{formatDateTime(slot.startsAt)}</strong>
-                    <span>
-                      {formatDateTime(slot.endsAt)} · {slot.reservedCount}/{slot.capacity}
-                    </span>
-                  </div>
-                  <span className={`status-pill ${slot.status.toLowerCase()}`}>{slot.status}</span>
-                  <button
-                    className="secondary-button danger compact-button"
-                    type="button"
-                    disabled={!adminToken || slot.status !== 'OPEN' || cancellingSlotId === slot.id}
-                    onClick={() => void cancelAdminSlot(slot)}
-                  >
-                    <XCircle size={16} aria-hidden="true" />
-                    Cancel
-                  </button>
-                </article>
-              ))}
+            <div className="hero-card">
+              <div className="hero-badge">
+                <Lock size={16} aria-hidden="true" />
+                <span>{customerToken ? 'Customer session active' : 'Login required to reserve'}</span>
+              </div>
+              <div className="hero-badge">
+                <ShieldCheck size={16} aria-hidden="true" />
+                <span>{isAdminPort ? `Admin port: ${apiConfig.adminPort}` : 'Admin port locked'}</span>
+              </div>
+              {customerToken ? (
+                <button className="secondary-button" type="button" onClick={handleLogout}>
+                  <LogOut size={16} aria-hidden="true" />
+                  Logout
+                </button>
+              ) : null}
             </div>
           </section>
 
-          <div className="admin-stats">
-            <Metric label="Offers" value={adminOffers.length} />
-            <Metric label="Confirmed" value={adminReservations.filter((item) => item.status === 'CONFIRMED').length} />
-            <Metric label="Cancelled" value={adminReservations.filter((item) => item.status === 'CANCELLED').length} />
-          </div>
+          <section className="landing-grid">
+            <section className="panel">
+              <div className="panel-header">
+                <h2>
+                  <ClipboardList size={16} aria-hidden="true" />
+                  Offers
+                </h2>
+                <span className="tag">{offers.length} active</span>
+              </div>
+              <div className="offer-grid">
+                {offers.length === 0 && !isLoadingOffers ? <EmptyState label="No active offers" /> : null}
+                {offers.map((offer) => (
+                  <button
+                    className={`offer-card ${selectedOfferId === offer.id ? 'selected' : ''}`}
+                    type="button"
+                    key={offer.id}
+                    onClick={() => setSelectedOfferId(offer.id)}
+                  >
+                    <img className="offer-image" src={offer.imageUrl} alt={offer.name} />
+                    <div className="offer-body">
+                      <div>
+                        <strong>{offer.name}</strong>
+                        <p>{offer.description}</p>
+                      </div>
+                      <span className="price-tag">{formatCurrency(offer.price)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
 
-          <div className="reservation-list">
-            {adminReservations.length === 0 ? <EmptyState label="No reservations loaded" /> : null}
-            {adminReservations.map((reservation) => (
-              <article className="reservation-row" key={reservation.id}>
-                <div>
-                  <strong>#{reservation.id}</strong>
-                  <span>{reservation.customerEmail}</span>
+            <section className="panel">
+              <div className="panel-header">
+                <h2>
+                  <CalendarDays size={16} aria-hidden="true" />
+                  Availability
+                </h2>
+                <span className="tag">{slots.length} open</span>
+              </div>
+              <div className="slots-list">
+                {slots.length === 0 && !isLoadingSlots ? <EmptyState label="No open slots" /> : null}
+                {slots.map((slot) => (
+                  <button
+                    className={`slot-card ${selectedSlotId === slot.id ? 'selected' : ''}`}
+                    type="button"
+                    key={slot.id}
+                    onClick={() => setSelectedSlotId(slot.id)}
+                  >
+                    <div>
+                      <strong>{formatDateTime(slot.startsAt)}</strong>
+                      <span>
+                        {slot.capacity - slot.reservedCount}/{slot.capacity} seats
+                      </span>
+                    </div>
+                    <span className={`status-pill ${slot.status.toLowerCase()}`}>{slot.status}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="panel reservation-panel">
+              <div className="panel-header">
+                <h2>
+                  <TicketCheck size={16} aria-hidden="true" />
+                  Reservation
+                </h2>
+                <span className="tag">{selectedSlot ? `Slot #${selectedSlot.id}` : 'Select slot'}</span>
+              </div>
+              <form className="reservation-form" onSubmit={submitReservation}>
+                <label>
+                  Name
+                  <input
+                    type="text"
+                    value={reservationForm.customerName}
+                    onChange={(event) =>
+                      setReservationForm((current) => ({ ...current, customerName: event.target.value }))
+                    }
+                    autoComplete="name"
+                    maxLength={255}
+                    required
+                  />
+                </label>
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    value={reservationForm.customerEmail}
+                    onChange={(event) =>
+                      setReservationForm((current) => ({ ...current, customerEmail: event.target.value }))
+                    }
+                    autoComplete="email"
+                    maxLength={255}
+                    required
+                  />
+                </label>
+                <label>
+                  Party size
+                  <input
+                    type="number"
+                    min="1"
+                    value={reservationForm.partySize}
+                    onChange={(event) =>
+                      setReservationForm((current) => ({ ...current, partySize: event.target.value }))
+                    }
+                    max={selectedSlot ? selectedSlot.capacity - selectedSlot.reservedCount : undefined}
+                    required
+                  />
+                </label>
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={
+                    isSubmittingReservation ||
+                    !customerToken ||
+                    !selectedSlot ||
+                    selectedSlotRemaining <= 0
+                  }
+                >
+                  <TicketCheck size={16} aria-hidden="true" />
+                  Reserve
+                </button>
+                {!customerToken && (
+                  <p className="helper">
+                    Please login first. Go to{' '}
+                    <button className="link-button" type="button" onClick={() => setScreen('auth')}>
+                      Login / Register
+                    </button>
+                    .
+                  </p>
+                )}
+              </form>
+
+              {lastReservation && (
+                <div className="reservation-result">
+                  <div className="result-heading">
+                    <CheckCircle2 size={18} aria-hidden="true" />
+                    <strong>Reservation #{lastReservation.id}</strong>
+                  </div>
+                  <div className="result-row">
+                    <span>Status</span>
+                    <span>{lastReservation.status}</span>
+                  </div>
+                  <div className="result-row">
+                    <span>Email</span>
+                    <span>{lastReservation.customerEmail}</span>
+                  </div>
+                  <div className="result-row">
+                    <span>Party size</span>
+                    <span>{lastReservation.partySize}</span>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={cancelLastReservation}
+                    disabled={isSubmittingReservation || lastReservation.status === 'CANCELLED'}
+                  >
+                    <XCircle size={18} aria-hidden="true" />
+                    Cancel
+                  </button>
                 </div>
-                <span className={`status-pill ${reservation.status.toLowerCase()}`}>{reservation.status}</span>
-              </article>
-            ))}
-          </div>
-        </section>
-      </section>
+              )}
+            </section>
+          </section>
+        </>
+      )}
     </main>
-  );
-}
-
-function PanelHeader(props: { icon: ReactNode; title: string; meta: string }) {
-  return (
-    <div className="panel-header">
-      <h2>
-        {props.icon}
-        {props.title}
-      </h2>
-      <span>{props.meta}</span>
-    </div>
-  );
-}
-
-function Metric(props: { label: string; value: number }) {
-  return (
-    <div className="metric">
-      <strong>{props.value}</strong>
-      <span>{props.label}</span>
-    </div>
   );
 }
 
@@ -937,16 +1121,18 @@ function EmptyState(props: { label: string }) {
   );
 }
 
-function ErrorBanner(props: { error: ApiErrorResponse }) {
+function ErrorBanner({ error }: { error: ApiErrorResponse }) {
   return (
-    <section className="error-banner" aria-live="polite">
-      <AlertCircle size={20} aria-hidden="true" />
+    <div className="error-banner">
+      <span className="error-icon">
+        <XCircle size={18} aria-hidden="true" />
+      </span>
       <div>
-        <strong>{props.error.code}</strong>
-        <span>{props.error.message}</span>
-        {props.error.details && props.error.details.length > 0 ? (
+        <strong>{error.code}</strong>
+        <span>{error.message}</span>
+        {error.details && error.details.length > 0 ? (
           <ul>
-            {props.error.details.map((detail) => (
+            {error.details.map((detail) => (
               <li key={`${detail.field}-${detail.message}`}>
                 {detail.field}: {detail.message}
               </li>
@@ -954,8 +1140,21 @@ function ErrorBanner(props: { error: ApiErrorResponse }) {
           </ul>
         ) : null}
       </div>
-    </section>
+    </div>
   );
+}
+
+function createDefaultSlotForm(offerId?: number): SlotFormState {
+  const now = new Date();
+  const startsAt = new Date(now.getTime() + 30 * 60 * 1000);
+  const endsAt = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+  return {
+    offerId: offerId ? String(offerId) : '',
+    startsAt: toLocalInput(startsAt),
+    endsAt: toLocalInput(endsAt),
+    capacity: '10',
+  };
 }
 
 function toApiError(caught: unknown): ApiErrorResponse {
@@ -972,59 +1171,40 @@ function toApiError(caught: unknown): ApiErrorResponse {
   }
 
   return {
-    code: 'CLIENT_ERROR',
-    message: 'Unexpected client error',
+    code: 'UNKNOWN_ERROR',
+    message: 'Something went wrong',
     details: [],
   };
 }
 
-function toCreateSlotError(caught: unknown): ApiErrorResponse {
-  const apiError = toApiError(caught);
-
-  if (apiError.code === 'AVAILABILITY_SLOT_ALREADY_EXISTS') {
-    return {
-      ...apiError,
-      message: 'Slot for this offer and time already exists.',
-      details: [],
-    };
+function requireAccessToken(accessToken: string | null): string | null {
+  if (accessToken) {
+    return accessToken;
   }
 
-  return apiError;
+  return null;
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pl-PL', {
-    style: 'currency',
-    currency: 'PLN',
-  }).format(value);
-}
-
-function createDefaultSlotForm(): SlotFormState {
-  const startsAt = new Date();
-  startsAt.setDate(startsAt.getDate() + 1);
-  startsAt.setMinutes(0, 0, 0);
-
-  const endsAt = new Date(startsAt);
-  endsAt.setHours(endsAt.getHours() + 1);
-
-  return {
-    offerId: '',
-    startsAt: toDateTimeLocalValue(startsAt),
-    endsAt: toDateTimeLocalValue(endsAt),
-    capacity: '10',
-  };
-}
-
-function toDateTimeLocalValue(value: Date): string {
-  const localValue = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
-  return localValue.toISOString().slice(0, 16);
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat('pl-PL', {
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return date.toLocaleString('pl-PL', {
     day: '2-digit',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(value));
+  });
+}
+
+function toLocalInput(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
+}
+
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat('pl-PL', {
+    style: 'currency',
+    currency: 'PLN',
+  }).format(amount);
 }
