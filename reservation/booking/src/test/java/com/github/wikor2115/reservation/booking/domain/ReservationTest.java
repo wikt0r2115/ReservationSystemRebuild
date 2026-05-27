@@ -30,7 +30,7 @@ class ReservationTest {
     private static final LocalDateTime CANCELLED_AT = LocalDateTime.of(2026, 6, 1, 11, 0);
 
     @Test
-    void create_validData_createsConfirmedReservation() {
+    void create_validData_createsPendingReservation() {
         Reservation reservation = sampleReservation();
 
         assertAll(
@@ -40,7 +40,7 @@ class ReservationTest {
                 () -> assertEquals(CUSTOMER_NAME, reservation.getCustomerName()),
                 () -> assertEquals(CUSTOMER_EMAIL, reservation.getCustomerEmail()),
                 () -> assertEquals(PARTY_SIZE, reservation.getPartySize()),
-                () -> assertEquals(ReservationStatus.CONFIRMED, reservation.getStatus()),
+                () -> assertEquals(ReservationStatus.PENDING, reservation.getStatus()),
                 () -> assertEquals(CREATED_AT, reservation.getCreatedAt()),
                 () -> assertNull(reservation.getCancelledAt()));
     }
@@ -183,8 +183,58 @@ class ReservationTest {
     }
 
     @Test
+    void confirm_whenPending_changesStatusToConfirmed() {
+        Reservation reservation = sampleReservation();
+
+        reservation.confirm();
+
+        assertEquals(ReservationStatus.CONFIRMED, reservation.getStatus());
+        assertNull(reservation.getCancelledAt());
+    }
+
+    @Test
+    void confirm_whenAlreadyConfirmed_throwsIllegalStateException() {
+        Reservation reservation = sampleReservation();
+        reservation.confirm();
+
+        assertThrows(IllegalStateException.class, reservation::confirm);
+        assertEquals(ReservationStatus.CONFIRMED, reservation.getStatus());
+    }
+
+    @Test
+    void reject_whenPending_changesStatusToRejected() {
+        Reservation reservation = sampleReservation();
+
+        reservation.reject();
+
+        assertEquals(ReservationStatus.REJECTED, reservation.getStatus());
+        assertNull(reservation.getCancelledAt());
+    }
+
+    @Test
+    void reject_whenAlreadyConfirmed_throwsIllegalStateException() {
+        Reservation reservation = sampleReservation();
+        reservation.confirm();
+
+        assertThrows(IllegalStateException.class, reservation::reject);
+        assertEquals(ReservationStatus.CONFIRMED, reservation.getStatus());
+    }
+
+    @Test
+    void cancel_whenPending_changesStatusToCancelledAndSetsCancelledAt() {
+        Reservation reservation = sampleReservation();
+
+        reservation.cancel(CANCELLED_CLOCK);
+
+        assertEquals(ReservationStatus.CANCELLED, reservation.getStatus());
+        assertEquals(CANCELLED_AT, reservation.getCancelledAt());
+        assertEquals(CREATED_AT, reservation.getCreatedAt());
+    }
+
+    @Test
     void cancel_whenConfirmed_changesStatusToCancelledAndSetsCancelledAt() {
         Reservation reservation = sampleReservation();
+        reservation.confirm();
 
         reservation.cancel(CANCELLED_CLOCK);
 
@@ -208,7 +258,17 @@ class ReservationTest {
         Reservation reservation = sampleReservation();
 
         assertThrows(IllegalArgumentException.class, () -> reservation.cancel(null));
-        assertEquals(ReservationStatus.CONFIRMED, reservation.getStatus());
+        assertEquals(ReservationStatus.PENDING, reservation.getStatus());
+        assertNull(reservation.getCancelledAt());
+    }
+
+    @Test
+    void cancel_whenRejected_throwsIllegalStateException() {
+        Reservation reservation = sampleReservation();
+        reservation.reject();
+
+        assertThrows(IllegalStateException.class, () -> reservation.cancel(CANCELLED_CLOCK));
+        assertEquals(ReservationStatus.REJECTED, reservation.getStatus());
         assertNull(reservation.getCancelledAt());
     }
 

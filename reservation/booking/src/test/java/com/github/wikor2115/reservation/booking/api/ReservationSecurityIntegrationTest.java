@@ -76,6 +76,18 @@ class ReservationSecurityIntegrationTest {
     }
 
     @Test
+    void adminConfirmReservation_withCustomerRole_returnsForbidden() throws Exception {
+        mockMvc.perform(withBearerToken(post("/api/v1/admin/reservations/1/confirm"), UserRole.CUSTOMER))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminRejectReservation_withCustomerRole_returnsForbidden() throws Exception {
+        mockMvc.perform(withBearerToken(post("/api/v1/admin/reservations/1/reject"), UserRole.CUSTOMER))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void adminReservationList_withAdminRole_reachesController() throws Exception {
         mockMvc.perform(withBearerToken(get("/api/v1/admin/reservations"), UserRole.ADMIN))
                 .andExpect(status().isOk());

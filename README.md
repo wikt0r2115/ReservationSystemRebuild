@@ -126,6 +126,12 @@ The Vite dev server starts on:
 http://localhost:5173
 ```
 
+Admin panel is served from the same frontend under:
+
+```text
+http://localhost:5173/admin
+```
+
 During local development the frontend proxies API traffic through these
 prefixes, so the backend modules should be running on their default ports:
 

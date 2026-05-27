@@ -245,6 +245,18 @@ Admin list reservations for a slot:
 curl -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8082/api/v1/admin/availability/1/reservations
 ```
 
+Admin confirm pending reservation:
+
+```bash
+curl -H "Authorization: Bearer $ADMIN_TOKEN" -X POST http://localhost:8082/api/v1/admin/reservations/1/confirm
+```
+
+Admin reject pending reservation:
+
+```bash
+curl -H "Authorization: Bearer $ADMIN_TOKEN" -X POST http://localhost:8082/api/v1/admin/reservations/1/reject
+```
+
 Cancel reservation:
 
 ```bash
@@ -254,9 +266,17 @@ curl -H "Authorization: Bearer $CUSTOMER_TOKEN" -X DELETE http://localhost:8082/
 ## Booking Business Rules
 
 - Creating a reservation requires an existing availability slot.
-- Creating a reservation increases `reservedCount` on the slot.
+- Creating a reservation creates a `PENDING` reservation and increases
+  `reservedCount` on the slot.
+- Admin confirmation changes a pending reservation to `CONFIRMED` without
+  changing capacity, because pending reservations already hold capacity.
+- Admin rejection changes a pending reservation to `REJECTED` and releases
+  reserved capacity.
 - If `partySize` would exceed remaining capacity, the API returns
   `BUSINESS_RULE_VIOLATION`.
 - Canceling a reservation changes its status to `CANCELLED`.
+- Canceling a pending or confirmed reservation releases reserved capacity.
+- Confirming or rejecting a non-pending reservation returns
+  `BUSINESS_RULE_VIOLATION`.
 - Canceling a reservation releases its `partySize` from the slot.
 - Canceling an already-cancelled reservation returns `BUSINESS_RULE_VIOLATION`.

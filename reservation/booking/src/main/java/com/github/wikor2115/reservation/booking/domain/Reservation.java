@@ -95,9 +95,19 @@ public class Reservation {
         reservation.customerEmail = customerEmail.trim();
         reservation.partySize = partySize;
         reservation.createdAt = LocalDateTime.now(clock);
-        reservation.status = ReservationStatus.CONFIRMED;
+        reservation.status = ReservationStatus.PENDING;
         reservation.cancelledAt = null;
         return reservation;
+    }
+
+    public void confirm() {
+        ensurePending("Only pending reservation can be confirmed");
+        this.status = ReservationStatus.CONFIRMED;
+    }
+
+    public void reject() {
+        ensurePending("Only pending reservation can be rejected");
+        this.status = ReservationStatus.REJECTED;
     }
 
     public void cancel() {
@@ -105,7 +115,7 @@ public class Reservation {
     }
 
     public void cancel(Clock clock) {
-        ensureNotCancelled();
+        ensureCanBeCancelled();
         validateClock(clock);
         this.status = ReservationStatus.CANCELLED;
         this.cancelledAt = LocalDateTime.now(clock);
@@ -156,9 +166,16 @@ public class Reservation {
             throw new IllegalArgumentException("Clock must not be null");
     }
 
-    private void ensureNotCancelled() {
+    private void ensurePending(String message) {
+        if (this.status != ReservationStatus.PENDING)
+            throw new IllegalStateException(message);
+    }
+
+    private void ensureCanBeCancelled() {
         if (this.status == ReservationStatus.CANCELLED)
             throw new IllegalStateException("Reservation is cancelled");
+        if (this.status == ReservationStatus.REJECTED)
+            throw new IllegalStateException("Reservation is rejected");
     }
 
     public Long getId() {

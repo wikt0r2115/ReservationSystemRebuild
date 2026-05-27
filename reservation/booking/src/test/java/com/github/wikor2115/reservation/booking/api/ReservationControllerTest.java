@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.github.wikor2115.reservation.availability.service.AvailabilitySlotNotFoundException;
 import com.github.wikor2115.reservation.booking.domain.Reservation;
+import com.github.wikor2115.reservation.booking.domain.ReservationStatus;
 import com.github.wikor2115.reservation.booking.service.ReservationNotFoundException;
 import com.github.wikor2115.reservation.booking.service.ReservationService;
 import com.github.wikor2115.reservation.security.AuthenticatedUser;
@@ -75,7 +76,7 @@ class ReservationControllerTest {
                 .andExpect(jsonPath("$.customerName").value(CUSTOMER_NAME))
                 .andExpect(jsonPath("$.customerEmail").value(CUSTOMER_EMAIL))
                 .andExpect(jsonPath("$.partySize").value(PARTY_SIZE))
-                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+                .andExpect(jsonPath("$.status").value("PENDING"));
     }
 
     @Test
@@ -163,7 +164,7 @@ class ReservationControllerTest {
                 .with(customerAuth(CUSTOMER_EMAIL)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(RESERVATION_ID))
-                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+                .andExpect(jsonPath("$.status").value("PENDING"));
     }
 
     @Test
@@ -203,6 +204,32 @@ class ReservationControllerTest {
     }
 
     @Test
+    void confirmReservation_pendingReservation_returnsConfirmedReservation() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/reservations/{reservationId}/confirm", RESERVATION_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(RESERVATION_ID))
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+    }
+
+    @Test
+    void confirmReservation_whenAlreadyConfirmed_returnsBusinessRuleViolation() throws Exception {
+        reservationService.confirmException = new IllegalStateException("Only pending reservation can be confirmed");
+
+        mockMvc.perform(post("/api/v1/admin/reservations/{reservationId}/confirm", RESERVATION_ID))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BUSINESS_RULE_VIOLATION"))
+                .andExpect(jsonPath("$.message").value("Only pending reservation can be confirmed"));
+    }
+
+    @Test
+    void rejectReservation_pendingReservation_returnsRejectedReservation() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/reservations/{reservationId}/reject", RESERVATION_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(RESERVATION_ID))
+                .andExpect(jsonPath("$.status").value("REJECTED"));
+    }
+
+    @Test
     void cancelReservation_existingReservation_returnsCancelledReservation() throws Exception {
         mockMvc.perform(delete("/api/v1/reservations/{reservationId}", RESERVATION_ID)
                 .with(customerAuth(CUSTOMER_EMAIL)))
@@ -231,7 +258,7 @@ class ReservationControllerTest {
                 .andExpect(jsonPath("$.code").value("RESERVATION_ACCESS_DENIED"));
     }
 
-    private static Reservation sampleReservation(Long reservationId, boolean cancelled) {
+    private static Reservation sampleReservation(Long reservationId, ReservationStatus status) {
         Reservation reservation = Reservation.create(
                 AVAILABILITY_SLOT_ID,
                 OFFER_ID,
@@ -240,7 +267,11 @@ class ReservationControllerTest {
                 PARTY_SIZE,
                 CLOCK);
         ReflectionTestUtils.setField(reservation, "id", reservationId);
-        if (cancelled) {
+        if (status == ReservationStatus.CONFIRMED) {
+            reservation.confirm();
+        } else if (status == ReservationStatus.REJECTED) {
+            reservation.reject();
+        } else if (status == ReservationStatus.CANCELLED) {
             reservation.cancel(CLOCK);
         }
         return reservation;
@@ -258,6 +289,8 @@ class ReservationControllerTest {
     private static final class StubReservationService extends ReservationService {
         private RuntimeException createException;
         private RuntimeException findException;
+        private RuntimeException confirmException;
+        private RuntimeException rejectException;
         private RuntimeException cancelException;
 
         private StubReservationService() {
@@ -274,7 +307,7 @@ class ReservationControllerTest {
             if (createException != null) {
                 throw createException;
             }
-            return sampleReservation(RESERVATION_ID, false);
+            return sampleReservation(RESERVATION_ID, ReservationStatus.PENDING);
         }
 
         @Override
@@ -282,22 +315,38 @@ class ReservationControllerTest {
             if (findException != null) {
                 throw findException;
             }
-            return sampleReservation(reservationId, false);
+            return sampleReservation(reservationId, ReservationStatus.PENDING);
         }
 
         @Override
         public List<Reservation> findReservationsByCustomerEmail(String customerEmail) {
-            return List.of(sampleReservation(RESERVATION_ID, false));
+            return List.of(sampleReservation(RESERVATION_ID, ReservationStatus.PENDING));
         }
 
         @Override
         public List<Reservation> findAllReservations() {
-            return List.of(sampleReservation(RESERVATION_ID, false));
+            return List.of(sampleReservation(RESERVATION_ID, ReservationStatus.PENDING));
         }
 
         @Override
         public List<Reservation> findReservationsByAvailabilitySlotId(Long availabilitySlotId) {
-            return List.of(sampleReservation(RESERVATION_ID, false));
+            return List.of(sampleReservation(RESERVATION_ID, ReservationStatus.PENDING));
+        }
+
+        @Override
+        public Reservation confirmReservation(Long reservationId) {
+            if (confirmException != null) {
+                throw confirmException;
+            }
+            return sampleReservation(reservationId, ReservationStatus.CONFIRMED);
+        }
+
+        @Override
+        public Reservation rejectReservation(Long reservationId) {
+            if (rejectException != null) {
+                throw rejectException;
+            }
+            return sampleReservation(reservationId, ReservationStatus.REJECTED);
         }
 
         @Override
@@ -305,7 +354,7 @@ class ReservationControllerTest {
             if (cancelException != null) {
                 throw cancelException;
             }
-            return sampleReservation(reservationId, true);
+            return sampleReservation(reservationId, ReservationStatus.CANCELLED);
         }
     }
 }
