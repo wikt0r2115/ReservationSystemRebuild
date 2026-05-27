@@ -16,7 +16,7 @@ public class AuthDataInitializer {
             @Value("${reservation.auth.admin.seed.enabled:false}") boolean enabled,
             @Value("${reservation.auth.admin.seed.email:admin@example.com}") String email,
             @Value("${reservation.auth.admin.seed.display-name:Admin}") String displayName,
-            @Value("${reservation.auth.admin.seed.password:admin123}") String password
+            @Value("${reservation.auth.admin.seed.password}") String password
     ) {
         return args -> {
             if (enabled) {

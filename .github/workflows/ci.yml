@@ -150,6 +150,6 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: postgres-smoke-logs
-          path: .ci-postgres-smoke
+          path: ${{ github.workspace }}/.ci-postgres-smoke
           include-hidden-files: true
           if-no-files-found: ignore
