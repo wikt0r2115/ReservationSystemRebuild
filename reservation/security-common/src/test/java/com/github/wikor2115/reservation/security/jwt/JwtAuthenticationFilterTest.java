@@ -1,6 +1,7 @@
 package com.github.wikor2115.reservation.security.jwt;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -57,6 +58,7 @@ class JwtAuthenticationFilterTest {
         filter.doFilter(request, response, new MockFilterChain());
 
         assertEquals(HttpServletResponse.SC_UNAUTHORIZED, response.getStatus());
+        assertFalse(response.getContentAsString().contains("JWT strings must contain exactly 2 period characters"));
         assertNull(SecurityContextHolder.getContext().getAuthentication());
     }
 }

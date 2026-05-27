@@ -114,9 +114,11 @@ export function App() {
     password: apiConfig.adminPassword,
   });
   const [customerToken, setCustomerToken] = useState<string | null>(
-    () => localStorage.getItem(CUSTOMER_TOKEN_KEY),
+    () => localStorage.getItem(CUSTOMER_TOKEN_KEY) ?? (apiConfig.useMockApi ? 'mock-customer-token' : null),
   );
-  const [adminToken, setAdminToken] = useState<string | null>(() => localStorage.getItem(ADMIN_TOKEN_KEY));
+  const [adminToken, setAdminToken] = useState<string | null>(
+    () => localStorage.getItem(ADMIN_TOKEN_KEY) ?? (apiConfig.useMockApi ? 'mock-admin-token' : null),
+  );
   const [isLoadingOffers, setIsLoadingOffers] = useState(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isSubmittingReservation, setIsSubmittingReservation] = useState(false);
@@ -193,6 +195,18 @@ export function App() {
     window.addEventListener('popstate', handlePop);
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
+
+  useEffect(() => {
+    if (screen === 'admin' && adminToken && adminOffers.length === 0 && adminReservations.length === 0) {
+      void loadAdminData(adminToken);
+    }
+  }, [screen, adminToken, adminOffers.length, adminReservations.length]);
+
+  useEffect(() => {
+    if (screen === 'admin' && adminToken && selectedAdminOfferId !== null) {
+      void loadAdminSlots(selectedAdminOfferId, adminToken);
+    }
+  }, [screen, adminToken, selectedAdminOfferId]);
 
   function navigate(nextScreen: Screen) {
     const nextPath = nextScreen === 'landing' ? '/' : `/${nextScreen}`;
@@ -331,6 +345,11 @@ export function App() {
       ]);
       setAdminReservations(reservations);
       setAdminOffers(allOffers);
+      setSelectedAdminOfferId((current) => current ?? allOffers[0]?.id ?? null);
+      setSlotForm((current) => ({
+        ...current,
+        offerId: current.offerId || String(allOffers[0]?.id ?? ''),
+      }));
     } catch (caught) {
       setError(toApiError(caught));
     } finally {
@@ -568,6 +587,10 @@ export function App() {
     setAdminSlots([]);
   }
 
+  const openSeatCount = slots.reduce((total, slot) => total + Math.max(0, slot.capacity - slot.reservedCount), 0);
+  const pendingReservationCount = adminReservations.filter((reservation) => reservation.status === 'PENDING').length;
+  const confirmedReservationCount = adminReservations.filter((reservation) => reservation.status === 'CONFIRMED').length;
+
   return (
     <main className="app-shell">
       <header className="nav">
@@ -577,17 +600,17 @@ export function App() {
           </span>
           <div>
             <span className="logo-title">Reservation System</span>
-            <span className="logo-subtitle">Simple booking for curated offers</span>
+            <span className="logo-subtitle">Spring Boot + React portfolio MVP</span>
           </div>
         </div>
         <div className="nav-actions">
           <button className="ghost-button" type="button" onClick={() => navigate('landing')}>
             <DoorOpen size={16} aria-hidden="true" />
-            Landing
+            Book
           </button>
           <button className="ghost-button" type="button" onClick={() => navigate('auth')}>
             <LogIn size={16} aria-hidden="true" />
-            Login / Register
+            Account
           </button>
           <button className="ghost-button" type="button" onClick={() => navigate('admin')}>
             <LayoutDashboard size={16} aria-hidden="true" />
@@ -603,9 +626,9 @@ export function App() {
           <div className="auth-card">
             <div className="auth-header">
               <div>
-                <p className="eyebrow">Access</p>
-                <h1>Login or register</h1>
-                <p className="helper">Authenticate to create and manage reservations.</p>
+                <p className="eyebrow">Account access</p>
+                <h1>Customer login</h1>
+                <p className="helper">JWT authentication protects reservation and admin workflows.</p>
               </div>
               <span className="tag">Auth module: {apiConfig.authBaseUrl}</span>
             </div>
@@ -710,6 +733,18 @@ export function App() {
 
       {screen === 'admin' && (
         <section className="admin-screen">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Operations</p>
+              <h1>Admin workspace</h1>
+              <p className="helper">Create offers, publish availability and process pending reservations.</p>
+            </div>
+            <div className="summary-strip">
+              <Metric label="Pending" value={pendingReservationCount} />
+              <Metric label="Confirmed" value={confirmedReservationCount} />
+              <Metric label="Offers" value={adminOffers.length || offers.length} />
+            </div>
+          </div>
           <div className="admin-grid">
             <div className="panel admin-card">
               <div className="panel-header">
@@ -918,7 +953,10 @@ export function App() {
                       <article className="slot-card" key={slot.id}>
                         <div>
                           <strong>#{slot.id}</strong>
-                          <span>{formatDateTime(slot.startsAt)}</span>
+                          <span>
+                            {formatDateTime(slot.startsAt)} - {slot.capacity - slot.reservedCount}/{slot.capacity}{' '}
+                            seats
+                          </span>
                         </div>
                         <span className={`status-pill ${slot.status.toLowerCase()}`}>{slot.status}</span>
                       </article>
@@ -940,7 +978,9 @@ export function App() {
                       <article className="slot-card reservation-row" key={reservation.id}>
                         <div>
                           <strong>#{reservation.id}</strong>
-                          <span>{reservation.customerEmail}</span>
+                          <span>
+                            {reservation.customerEmail} - {reservation.partySize} guests
+                          </span>
                         </div>
                         <div className="reservation-actions">
                           <span className={`status-pill ${reservation.status.toLowerCase()}`}>
@@ -954,6 +994,7 @@ export function App() {
                                 onClick={() => confirmAdminReservation(reservation.id)}
                                 disabled={reservationActionId === reservation.id}
                               >
+                                <CheckCircle2 size={16} aria-hidden="true" />
                                 Confirm
                               </button>
                               <button
@@ -962,6 +1003,7 @@ export function App() {
                                 onClick={() => rejectAdminReservation(reservation.id)}
                                 disabled={reservationActionId === reservation.id}
                               >
+                                <XCircle size={16} aria-hidden="true" />
                                 Reject
                               </button>
                             </div>
@@ -981,16 +1023,15 @@ export function App() {
         <>
           <section className="hero">
             <div className="hero-copy">
-              <p className="eyebrow">Landing</p>
-              <h1>Pick an offer and reserve your spot.</h1>
+              <p className="eyebrow">Booking flow</p>
+              <h1>Reserve a curated service in one controlled workflow.</h1>
               <p className="helper">
-                Browse curated offers, choose a time slot, and book in a few clicks. Login is required for
-                reservations.
+                Browse offers, choose an available slot and create a reservation protected by JWT authentication.
               </p>
               <div className="hero-actions">
                 <button className="primary-button" type="button" onClick={() => navigate('auth')}>
                   <LogIn size={16} aria-hidden="true" />
-                  Login / Register
+                  Customer access
                 </button>
                 <button className="secondary-button" type="button" onClick={loadOffers} disabled={isLoadingOffers}>
                   Refresh offers
@@ -998,6 +1039,11 @@ export function App() {
               </div>
             </div>
             <div className="hero-card">
+              <div className="metric-grid">
+                <Metric label="Active offers" value={offers.length} />
+                <Metric label="Open slots" value={slots.length} />
+                <Metric label="Open seats" value={openSeatCount} />
+              </div>
               <div className="hero-badge">
                 <Lock size={16} aria-hidden="true" />
                 <span>{customerToken ? 'Customer session active' : 'Login required to reserve'}</span>
@@ -1025,6 +1071,7 @@ export function App() {
                 <span className="tag">{offers.length} active</span>
               </div>
               <div className="offer-grid">
+                {isLoadingOffers ? <EmptyState label="Loading offers" /> : null}
                 {offers.length === 0 && !isLoadingOffers ? <EmptyState label="No active offers" /> : null}
                 {offers.map((offer) => (
                   <button
@@ -1055,6 +1102,7 @@ export function App() {
                 <span className="tag">{slots.length} open</span>
               </div>
               <div className="slots-list">
+                {isLoadingSlots ? <EmptyState label="Loading slots" /> : null}
                 {slots.length === 0 && !isLoadingSlots ? <EmptyState label="No open slots" /> : null}
                 {slots.map((slot) => (
                   <button
@@ -1083,6 +1131,16 @@ export function App() {
                 </h2>
                 <span className="tag">{selectedSlot ? `Slot #${selectedSlot.id}` : 'Select slot'}</span>
               </div>
+              {selectedOffer ? (
+                <div className="selected-summary">
+                  <strong>{selectedOffer.name}</strong>
+                  <span>
+                    {selectedSlot
+                      ? `${formatDateTime(selectedSlot.startsAt)} - ${selectedSlotRemaining} seats left`
+                      : 'Select a slot'}
+                  </span>
+                </div>
+              ) : null}
               <form className="reservation-form" onSubmit={submitReservation}>
                 <label>
                   Name
@@ -1184,6 +1242,15 @@ export function App() {
         </>
       )}
     </main>
+  );
+}
+
+function Metric(props: { label: string; value: number }) {
+  return (
+    <div className="metric">
+      <strong>{props.value}</strong>
+      <span>{props.label}</span>
+    </div>
   );
 }
 

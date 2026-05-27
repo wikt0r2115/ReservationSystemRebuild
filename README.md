@@ -2,8 +2,8 @@
 
 Spring Boot backend and React frontend for a reservation system. The current
 MVP contains tested backend modules for auth, offers, availability slots and
-reservations. The frontend provides a small operations console for creating
-offers/slots, making reservations and reviewing admin data.
+reservations. The frontend provides a customer booking flow and an admin
+workspace for creating offers/slots and processing reservations.
 
 The project is intentionally still a portfolio MVP. It keeps H2 for fast
 local/test runs, and also has a PostgreSQL/Flyway/Docker Compose development
@@ -47,6 +47,16 @@ frontend
 - Offer V1 plan: [docs/offer-module-v1-plan.md](docs/offer-module-v1-plan.md)
 - Implemented MVP API: [docs/api-contract.md](docs/api-contract.md)
 - Current architecture decision: [docs/mvp-architecture.md](docs/mvp-architecture.md)
+
+## Frontend Preview
+
+Customer booking flow:
+
+![Customer booking flow](docs/screenshots/customer-booking.png)
+
+Admin workspace:
+
+![Admin workspace](docs/screenshots/admin-workspace.png)
 
 ## Build And Test
 
@@ -132,6 +142,14 @@ Admin panel is served from the same frontend under:
 http://localhost:5173/admin
 ```
 
+For a portfolio/demo preview without running the backend modules, enable the
+frontend mock API:
+
+```bash
+cd frontend
+VITE_USE_MOCK_API=true npm run dev
+```
+
 During local development the frontend proxies API traffic through these
 prefixes, so the backend modules should be running on their default ports:
 
@@ -149,7 +167,8 @@ own in-memory database, so data created through `availability` is not shared
 with `booking`.
 
 Frontend auth defaults can be overridden with `VITE_CUSTOMER_EMAIL`,
-`VITE_CUSTOMER_PASSWORD`, `VITE_ADMIN_EMAIL` and `VITE_ADMIN_PASSWORD`.
+`VITE_CUSTOMER_PASSWORD`, `VITE_ADMIN_EMAIL`, `VITE_ADMIN_PASSWORD` and
+`VITE_USE_MOCK_API`.
 
 Swagger UI is enabled in the `dev` profile and disabled in default/test/prod:
 
@@ -194,6 +213,11 @@ password: reservation
 
 They can be overridden with `DATABASE_URL`, `DATABASE_USERNAME` and
 `DATABASE_PASSWORD`.
+
+Production-style runs with `--spring.profiles.active=prod` also require
+`JWT_SECRET`. Optional JWT settings are `JWT_ISSUER` and `JWT_EXPIRATION`.
+The auth module can seed an admin only when `AUTH_ADMIN_SEED_ENABLED=true`; in
+that case set `AUTH_ADMIN_PASSWORD` explicitly.
 
 Default local auth data:
 
@@ -338,12 +362,14 @@ Latest local full reactor result:
 
 ```text
 mvn test
-offer:        46 tests
-availability: 76 tests
-booking:      59 tests
+security-common: 9 tests
+auth:            29 tests
+offer:           46 tests
+availability:    76 tests
+booking:         82 tests, 2 skipped locally when Docker is unavailable
 BUILD SUCCESS
 
-mvn -DskipTests package
-plain module jars plus executable *-exec.jar artifacts
+npm run build
+frontend TypeScript and Vite production build
 BUILD SUCCESS
 ```

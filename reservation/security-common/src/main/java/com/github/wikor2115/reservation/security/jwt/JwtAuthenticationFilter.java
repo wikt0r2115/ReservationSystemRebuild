@@ -22,6 +22,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String INVALID_BEARER_TOKEN_DETAIL = "Bearer token is missing, expired or invalid";
 
     private final JwtTokenService jwtTokenService;
 
@@ -52,23 +53,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (JwtTokenException exception) {
             SecurityContextHolder.clearContext();
-            sendUnauthorized(response, exception.getMessage());
+            sendUnauthorized(response);
         }
     }
 
-    private static void sendUnauthorized(HttpServletResponse response, String detail) throws IOException {
+    private static void sendUnauthorized(HttpServletResponse response) throws IOException {
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.getWriter().write("""
                 {"code":"INVALID_BEARER_TOKEN","message":"Invalid bearer token","details":[{"field":"authorization","message":"%s"}]}
-                """.formatted(escapeJson(detail)));
-    }
-
-    private static String escapeJson(String value) {
-        return value == null ? "" : value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r");
+                """.formatted(INVALID_BEARER_TOKEN_DETAIL));
     }
 }
