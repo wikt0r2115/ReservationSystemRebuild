@@ -2,6 +2,7 @@ package com.github.wikor2115.reservation.booking.domain;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 import jakarta.persistence.Column;
@@ -11,6 +12,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Version;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,6 +26,9 @@ public class Reservation {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Version
+    private long version;
 
     @NotNull
     @Positive
@@ -92,7 +97,7 @@ public class Reservation {
         reservation.availabilitySlotId = availabilitySlotId;
         reservation.offerId = offerId;
         reservation.customerName = customerName.trim();
-        reservation.customerEmail = customerEmail.trim();
+        reservation.customerEmail = customerEmail.trim().toLowerCase(Locale.ROOT);
         reservation.partySize = partySize;
         reservation.createdAt = LocalDateTime.now(clock);
         reservation.status = ReservationStatus.PENDING;

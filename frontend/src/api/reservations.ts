@@ -6,6 +6,7 @@ import {
   mockConfirmReservation,
   mockCreateReservation,
   mockListAdminReservations,
+  mockListCustomerReservations,
   mockRejectReservation,
 } from './mockApi';
 
@@ -41,6 +42,17 @@ export function listAdminReservations(accessToken: string): Promise<Reservation[
   }
 
   return requestJson<Reservation[]>(`${apiConfig.bookingBaseUrl}/api/v1/admin/reservations`, {
+    accessToken,
+  });
+}
+
+export function listCustomerReservations(customerEmail: string, accessToken: string): Promise<Reservation[]> {
+  if (apiConfig.useMockApi) {
+    return mockListCustomerReservations(customerEmail);
+  }
+
+  const query = new URLSearchParams({ customerEmail });
+  return requestJson<Reservation[]>(`${apiConfig.bookingBaseUrl}/api/v1/reservations?${query}`, {
     accessToken,
   });
 }

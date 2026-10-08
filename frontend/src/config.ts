@@ -5,7 +5,7 @@ export const apiConfig = {
   authBaseUrl: import.meta.env.VITE_AUTH_API_BASE ?? '/auth-api',
   useMockApi: import.meta.env.VITE_USE_MOCK_API === 'true',
   customerEmail: import.meta.env.VITE_CUSTOMER_EMAIL ?? 'jan@example.com',
-  customerPassword: import.meta.env.VITE_CUSTOMER_PASSWORD ?? 'customer123',
+  customerPassword: import.meta.env.VITE_CUSTOMER_PASSWORD ?? (import.meta.env.VITE_USE_MOCK_API === 'true' ? 'customer123' : ''),
   adminEmail: import.meta.env.VITE_ADMIN_EMAIL ?? 'admin@example.com',
-  adminPassword: import.meta.env.VITE_ADMIN_PASSWORD ?? 'admin123',
+  adminPassword: import.meta.env.VITE_ADMIN_PASSWORD ?? (import.meta.env.VITE_USE_MOCK_API === 'true' ? 'admin123' : ''),
 };

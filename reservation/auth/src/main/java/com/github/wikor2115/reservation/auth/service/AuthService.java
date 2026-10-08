@@ -74,6 +74,16 @@ public class AuthService {
                         clock)));
     }
 
+    public UserAccount createCustomerIfMissing(String email, String displayName, String password) {
+        String normalizedEmail = normalizeEmail(email);
+        return userAccountRepository.findByEmailIgnoreCase(normalizedEmail)
+                .orElseGet(() -> saveNewAccount(UserAccount.registerCustomer(
+                        normalizedEmail,
+                        displayName,
+                        passwordEncoder.encode(requireText(password, "password")),
+                        clock)));
+    }
+
     @Transactional(readOnly = true)
     public AuthTokenResponse login(String email, String password) {
         String normalizedEmail = normalizeEmail(email);

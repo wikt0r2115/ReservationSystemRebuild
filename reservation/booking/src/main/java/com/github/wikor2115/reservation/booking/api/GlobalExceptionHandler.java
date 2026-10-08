@@ -6,16 +6,40 @@ import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import jakarta.persistence.OptimisticLockException;
+
 import com.github.wikor2115.reservation.availability.service.AvailabilitySlotNotFoundException;
+import com.github.wikor2115.reservation.availability.domain.AvailabilityCapacityExceededException;
 import com.github.wikor2115.reservation.booking.service.ReservationNotFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(AvailabilityCapacityExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleCapacityExceeded(AvailabilityCapacityExceededException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        "CAPACITY_EXCEEDED",
+                        exception.getMessage(),
+                        List.of()
+                ));
+    }
+
+    @ExceptionHandler({ OptimisticLockingFailureException.class, OptimisticLockException.class })
+    public ResponseEntity<ApiErrorResponse> handleConcurrentChange(RuntimeException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        "CONCURRENT_CHANGE",
+                        "The reservation or availability changed. Refresh and try again.",
+                        List.of()
+                ));
+    }
 
     @ExceptionHandler(ReservationNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleReservationNotFound(ReservationNotFoundException exception) {

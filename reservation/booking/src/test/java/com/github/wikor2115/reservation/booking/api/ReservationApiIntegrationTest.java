@@ -122,8 +122,8 @@ class ReservationApiIntegrationTest {
                           "partySize": 1
                         }
                         """.formatted(slot.getId())))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("BUSINESS_RULE_VIOLATION"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CAPACITY_EXCEEDED"))
                 .andExpect(jsonPath("$.message").value("Reservation would exceed capacity of 2"));
 
         mockMvc.perform(delete("/api/v1/reservations/{reservationId}", reservation.getId())

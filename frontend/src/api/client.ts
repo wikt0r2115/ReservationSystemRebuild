@@ -28,15 +28,29 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
     headers.set('Authorization', `Bearer ${options.accessToken}`);
   }
 
-  const response = await fetch(url, {
-    method: options.method ?? 'GET',
-    headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15_000);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: options.method ?? 'GET',
+      headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: controller.signal,
+    });
+  } catch (caught) {
+    throw new ApiRequestError(0, {
+      code: 'NETWORK_ERROR',
+      message: controller.signal.aborted ? 'Request timed out. Please try again.' : 'Connection failed. Please try again.',
+      details: [],
+    });
+  } finally {
+    window.clearTimeout(timeout);
+  }
 
   const contentType = response.headers.get('content-type') ?? '';
   const hasJson = contentType.includes('application/json');
-  const payload = hasJson ? await response.json() : null;
+  const payload = hasJson ? await response.json().catch(() => null) : null;
 
   if (!response.ok) {
     throw new ApiRequestError(response.status, normalizeError(response.status, payload));

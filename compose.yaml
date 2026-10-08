@@ -1,0 +1,122 @@
+x-backend-environment: &backend-environment
+  DATABASE_URL: jdbc:postgresql://postgres:5432/reservation
+  DATABASE_USERNAME: reservation
+  DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Run ./start-demo.sh first}
+  JWT_SECRET: ${JWT_SECRET:?Run ./start-demo.sh first}
+  JWT_ISSUER: reservation-auth
+
+x-backend-healthcheck: &backend-healthcheck
+  interval: 5s
+  timeout: 3s
+  retries: 30
+  start_period: 20s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: reservation
+      POSTGRES_USER: reservation
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run ./start-demo.sh first}
+    volumes:
+      - reservation-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reservation -d reservation"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  auth:
+    build:
+      context: .
+      dockerfile: reservation/Dockerfile
+      target: auth
+    environment:
+      <<: *backend-environment
+      AUTH_ADMIN_SEED_ENABLED: "true"
+      AUTH_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:?Run ./start-demo.sh first}
+      AUTH_CUSTOMER_SEED_ENABLED: "true"
+      AUTH_CUSTOMER_PASSWORD: ${DEMO_CUSTOMER_PASSWORD:?Run ./start-demo.sh first}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      <<: *backend-healthcheck
+      test: ["CMD", "curl", "--silent", "--output", "/dev/null", "--max-time", "2", "http://localhost:8083/"]
+    restart: unless-stopped
+
+  offer:
+    build:
+      context: .
+      dockerfile: reservation/Dockerfile
+      target: offer
+    environment:
+      <<: *backend-environment
+    depends_on:
+      auth:
+        condition: service_healthy
+    healthcheck:
+      <<: *backend-healthcheck
+      test: ["CMD", "curl", "--silent", "--output", "/dev/null", "--max-time", "2", "http://localhost:8080/api/v1/offers"]
+    restart: unless-stopped
+
+  availability:
+    build:
+      context: .
+      dockerfile: reservation/Dockerfile
+      target: availability
+    environment:
+      <<: *backend-environment
+    depends_on:
+      offer:
+        condition: service_healthy
+    healthcheck:
+      <<: *backend-healthcheck
+      test: ["CMD", "curl", "--silent", "--output", "/dev/null", "--max-time", "2", "http://localhost:8081/"]
+    restart: unless-stopped
+
+  booking:
+    build:
+      context: .
+      dockerfile: reservation/Dockerfile
+      target: booking
+    environment:
+      <<: *backend-environment
+    depends_on:
+      availability:
+        condition: service_healthy
+    healthcheck:
+      <<: *backend-healthcheck
+      test: ["CMD", "curl", "--silent", "--output", "/dev/null", "--max-time", "2", "http://localhost:8082/"]
+    restart: unless-stopped
+
+  demo-seed:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Run ./start-demo.sh first}
+    volumes:
+      - ./reservation/demo-seed.sql:/seed.sql:ro
+    entrypoint: ["psql", "--host=postgres", "--username=reservation", "--dbname=reservation", "--set=ON_ERROR_STOP=1", "--file=/seed.sql"]
+    depends_on:
+      booking:
+        condition: service_healthy
+    restart: "no"
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-8088}:80"
+    depends_on:
+      demo-seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  reservation-data:

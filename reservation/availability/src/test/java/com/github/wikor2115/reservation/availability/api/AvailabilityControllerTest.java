@@ -19,6 +19,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -189,6 +190,22 @@ class AvailabilityControllerTest {
                 .andExpect(jsonPath("$.message").value("Availability slot with id 404 not found"))
                 .andExpect(jsonPath("$.details[0].field").value("slotId"))
                 .andExpect(jsonPath("$.details[0].message").value("Availability slot with id 404 not found"));
+    }
+
+    @Test
+    void updateSlot_whenChangedConcurrently_returnsConflict() throws Exception {
+        availabilityService.updateException = new ObjectOptimisticLockingFailureException(
+                "AvailabilitySlot", SLOT_ID);
+
+        mockMvc.perform(patch("/api/v1/admin/availability/{slotId}", SLOT_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "capacity": 20
+                        }
+                        """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONCURRENT_CHANGE"));
     }
 
     @Test

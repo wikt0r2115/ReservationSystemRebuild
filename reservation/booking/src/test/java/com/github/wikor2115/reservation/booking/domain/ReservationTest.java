@@ -46,12 +46,12 @@ class ReservationTest {
     }
 
     @Test
-    void create_trimsCustomerNameAndEmail() {
+    void create_trimsNameAndNormalizesEmail() {
         Reservation reservation = Reservation.create(
                 AVAILABILITY_SLOT_ID,
                 OFFER_ID,
                 "  Jan Kowalski  ",
-                "  jan@example.com  ",
+                "  JAN@Example.com  ",
                 PARTY_SIZE,
                 CREATED_CLOCK);
 

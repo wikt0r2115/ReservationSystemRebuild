@@ -24,4 +24,19 @@ public class AuthDataInitializer {
             }
         };
     }
+
+    @Bean
+    ApplicationRunner seedCustomerAccount(
+            AuthService authService,
+            @Value("${reservation.auth.customer.seed.enabled:false}") boolean enabled,
+            @Value("${reservation.auth.customer.seed.email:jan@example.com}") String email,
+            @Value("${reservation.auth.customer.seed.display-name:Jan Kowalski}") String displayName,
+            @Value("${reservation.auth.customer.seed.password:}") String password
+    ) {
+        return args -> {
+            if (enabled) {
+                authService.createCustomerIfMissing(email, displayName, password);
+            }
+        };
+    }
 }

@@ -1,0 +1,179 @@
+{
+  "timestamp_utc": "2026-10-08T15:43:14.680439+00:00",
+  "base_url": "http://127.0.0.1:8090",
+  "dataset": {
+    "offers": 30,
+    "slots": 150,
+    "slot_capacity": 40
+  },
+  "requests_per_scenario": 600,
+  "resource_samples": [
+    {
+      "containers": [
+        "reservation-perf-postgres-1|35.22%|99.91MiB / 13.56GiB",
+        "reservation-perf-auth-1|1.04%|360.3MiB / 13.56GiB",
+        "reservation-perf-offer-1|22.86%|371MiB / 13.56GiB",
+        "reservation-perf-availability-1|437.04%|358.7MiB / 13.56GiB",
+        "reservation-perf-booking-1|0.17%|304.9MiB / 13.56GiB",
+        "reservation-perf-frontend-1|33.16%|8.754MiB / 13.56GiB"
+      ],
+      "db_connections": 41
+    },
+    {
+      "containers": [
+        "reservation-perf-postgres-1|54.06%|106MiB / 13.56GiB",
+        "reservation-perf-auth-1|6.69%|360.9MiB / 13.56GiB",
+        "reservation-perf-offer-1|250.09%|375.1MiB / 13.56GiB",
+        "reservation-perf-availability-1|0.24%|357.9MiB / 13.56GiB",
+        "reservation-perf-booking-1|220.86%|330.8MiB / 13.56GiB",
+        "reservation-perf-frontend-1|26.75%|9.262MiB / 13.56GiB"
+      ],
+      "db_connections": 41
+    },
+    {
+      "containers": [
+        "reservation-perf-postgres-1|44.77%|107.9MiB / 13.56GiB",
+        "reservation-perf-auth-1|0.16%|360.3MiB / 13.56GiB",
+        "reservation-perf-offer-1|304.69%|378.2MiB / 13.56GiB",
+        "reservation-perf-availability-1|14.63%|363.5MiB / 13.56GiB",
+        "reservation-perf-booking-1|119.19%|339MiB / 13.56GiB",
+        "reservation-perf-frontend-1|33.84%|10.36MiB / 13.56GiB"
+      ],
+      "db_connections": 41
+    },
+    {
+      "containers": [
+        "reservation-perf-postgres-1|0.04%|105.7MiB / 13.56GiB",
+        "reservation-perf-auth-1|0.35%|360.4MiB / 13.56GiB",
+        "reservation-perf-offer-1|0.25%|377.9MiB / 13.56GiB",
+        "reservation-perf-availability-1|0.22%|365.1MiB / 13.56GiB",
+        "reservation-perf-booking-1|0.24%|350.8MiB / 13.56GiB",
+        "reservation-perf-frontend-1|20.09%|9.004MiB / 13.56GiB"
+      ],
+      "db_connections": 41
+    }
+  ],
+  "consistency": {
+    "cancelled_reservations_verified": 1800,
+    "slots_with_zero_reserved_count": 150
+  },
+  "results": [
+    {
+      "scenario": "GET /offers",
+      "concurrency": 10,
+      "requests": 600,
+      "seconds": 1.134,
+      "throughput_rps": 528.95,
+      "p50_ms": 15.49,
+      "p95_ms": 38.6,
+      "errors": 0,
+      "status_counts": {
+        "200": 600
+      }
+    },
+    {
+      "scenario": "GET /availability",
+      "concurrency": 10,
+      "requests": 600,
+      "seconds": 0.909,
+      "throughput_rps": 660.42,
+      "p50_ms": 13.86,
+      "p95_ms": 24.1,
+      "errors": 0,
+      "status_counts": {
+        "200": 600
+      }
+    },
+    {
+      "scenario": "POST /reservations",
+      "concurrency": 10,
+      "requests": 600,
+      "seconds": 2.081,
+      "throughput_rps": 288.33,
+      "p50_ms": 26.51,
+      "p95_ms": 39.1,
+      "errors": 0,
+      "status_counts": {
+        "201": 600
+      }
+    },
+    {
+      "scenario": "GET /offers",
+      "concurrency": 25,
+      "requests": 600,
+      "seconds": 0.87,
+      "throughput_rps": 689.87,
+      "p50_ms": 30.74,
+      "p95_ms": 58.27,
+      "errors": 0,
+      "status_counts": {
+        "200": 600
+      }
+    },
+    {
+      "scenario": "GET /availability",
+      "concurrency": 25,
+      "requests": 600,
+      "seconds": 0.811,
+      "throughput_rps": 739.62,
+      "p50_ms": 29.29,
+      "p95_ms": 52.28,
+      "errors": 0,
+      "status_counts": {
+        "200": 600
+      }
+    },
+    {
+      "scenario": "POST /reservations",
+      "concurrency": 25,
+      "requests": 600,
+      "seconds": 1.179,
+      "throughput_rps": 508.98,
+      "p50_ms": 46.23,
+      "p95_ms": 72.57,
+      "errors": 0,
+      "status_counts": {
+        "201": 600
+      }
+    },
+    {
+      "scenario": "GET /offers",
+      "concurrency": 50,
+      "requests": 600,
+      "seconds": 0.827,
+      "throughput_rps": 725.57,
+      "p50_ms": 42.53,
+      "p95_ms": 92.92,
+      "errors": 0,
+      "status_counts": {
+        "200": 600
+      }
+    },
+    {
+      "scenario": "GET /availability",
+      "concurrency": 50,
+      "requests": 600,
+      "seconds": 0.761,
+      "throughput_rps": 788.19,
+      "p50_ms": 46.2,
+      "p95_ms": 88.48,
+      "errors": 0,
+      "status_counts": {
+        "200": 600
+      }
+    },
+    {
+      "scenario": "POST /reservations",
+      "concurrency": 50,
+      "requests": 600,
+      "seconds": 1.189,
+      "throughput_rps": 504.58,
+      "p50_ms": 73.86,
+      "p95_ms": 175.74,
+      "errors": 0,
+      "status_counts": {
+        "201": 600
+      }
+    }
+  ]
+}

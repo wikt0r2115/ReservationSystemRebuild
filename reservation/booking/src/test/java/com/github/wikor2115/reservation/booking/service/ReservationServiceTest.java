@@ -145,13 +145,13 @@ class ReservationServiceTest {
     @Test
     void findReservationsByCustomerEmail_trimsEmailAndReturnsRepositoryResult() {
         Reservation reservation = sampleReservation();
-        when(reservationRepository.findByCustomerEmailIgnoreCaseOrderByCreatedAtDesc(CUSTOMER_EMAIL))
+        when(reservationRepository.findByCustomerEmailOrderByCreatedAtDesc(CUSTOMER_EMAIL))
                 .thenReturn(List.of(reservation));
 
-        List<Reservation> result = reservationService.findReservationsByCustomerEmail("  jan@example.com  ");
+        List<Reservation> result = reservationService.findReservationsByCustomerEmail("  JAN@example.com  ");
 
         assertEquals(List.of(reservation), result);
-        verify(reservationRepository).findByCustomerEmailIgnoreCaseOrderByCreatedAtDesc(CUSTOMER_EMAIL);
+        verify(reservationRepository).findByCustomerEmailOrderByCreatedAtDesc(CUSTOMER_EMAIL);
     }
 
     @Test

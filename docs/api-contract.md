@@ -58,6 +58,8 @@ OFFER_NOT_FOUND
 AVAILABILITY_SLOT_NOT_FOUND
 RESERVATION_NOT_FOUND
 RESERVATION_ACCESS_DENIED
+CAPACITY_EXCEEDED
+CONCURRENT_CHANGE
 ```
 
 ## Auth API
@@ -204,6 +206,8 @@ curl -H "Authorization: Bearer $ADMIN_TOKEN" -X DELETE http://localhost:8081/api
   time. Use `capacity` to represent multiple seats.
 - Duplicate availability slot creation or update returns `409 Conflict` with
   `AVAILABILITY_SLOT_ALREADY_EXISTS`.
+- A concurrent change to the same slot returns `409 Conflict` with
+  `CONCURRENT_CHANGE`; fetch the slot again before retrying.
 
 ## Booking API
 
@@ -273,7 +277,9 @@ curl -H "Authorization: Bearer $CUSTOMER_TOKEN" -X DELETE http://localhost:8082/
 - Admin rejection changes a pending reservation to `REJECTED` and releases
   reserved capacity.
 - If `partySize` would exceed remaining capacity, the API returns
-  `BUSINESS_RULE_VIOLATION`.
+  `409 Conflict` with `CAPACITY_EXCEEDED`.
+- A reservation or slot changed by another transaction returns `409 Conflict`
+  with `CONCURRENT_CHANGE`; fetch current state before retrying.
 - Canceling a reservation changes its status to `CANCELLED`.
 - Canceling a pending or confirmed reservation releases reserved capacity.
 - Confirming or rejecting a non-pending reservation returns

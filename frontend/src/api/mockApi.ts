@@ -174,6 +174,12 @@ export async function mockListAdminReservations(): Promise<Reservation[]> {
   return reservations.map(copyReservation);
 }
 
+export async function mockListCustomerReservations(customerEmail: string): Promise<Reservation[]> {
+  return reservations
+    .filter((reservation) => reservation.customerEmail.toLowerCase() === customerEmail.toLowerCase())
+    .map(copyReservation);
+}
+
 export async function mockConfirmReservation(reservationId: number): Promise<Reservation> {
   return updateReservationStatus(reservationId, 'CONFIRMED', false);
 }

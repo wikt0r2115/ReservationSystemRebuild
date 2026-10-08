@@ -2,6 +2,7 @@ package com.github.wikor2115.reservation.booking.service;
 
 import java.time.Clock;
 import java.util.List;
+import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -72,7 +73,7 @@ public class ReservationService {
     @Transactional(readOnly = true)
     public List<Reservation> findReservationsByCustomerEmail(String customerEmail) {
         validateCustomerEmailForLookup(customerEmail);
-        return reservationRepository.findByCustomerEmailIgnoreCaseOrderByCreatedAtDesc(customerEmail.trim());
+        return reservationRepository.findByCustomerEmailOrderByCreatedAtDesc(customerEmail.trim().toLowerCase(Locale.ROOT));
     }
 
     @Transactional(readOnly = true)

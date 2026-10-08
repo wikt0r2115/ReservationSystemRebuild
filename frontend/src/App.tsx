@@ -23,6 +23,7 @@ import {
   confirmReservation,
   createReservation,
   listAdminReservations,
+  listCustomerReservations,
   rejectReservation,
 } from './api/reservations';
 import { apiConfig } from './config';
@@ -191,6 +192,35 @@ export function App() {
   }, [adminToken]);
 
   useEffect(() => {
+    if (!customerToken) {
+      setLastReservation(null);
+      return;
+    }
+
+    const customerEmail = tokenEmail(customerToken) ?? (apiConfig.useMockApi ? customerLoginForm.email : null);
+    if (!customerEmail) {
+      setCustomerToken(null);
+      return;
+    }
+
+    let active = true;
+    void listCustomerReservations(customerEmail, customerToken)
+      .then((reservations) => {
+        if (active) {
+          setLastReservation(reservations[0] ?? null);
+          setReservationForm((current) => ({ ...current, customerEmail: current.customerEmail || customerEmail }));
+        }
+      })
+      .catch((caught) => {
+        if (active) {
+          if (caught instanceof ApiRequestError && caught.status === 401) setCustomerToken(null);
+          setError(toApiError(caught));
+        }
+      });
+    return () => { active = false; };
+  }, [customerToken]);
+
+  useEffect(() => {
     const handlePop = () => setScreen(getScreenFromPath());
     window.addEventListener('popstate', handlePop);
     return () => window.removeEventListener('popstate', handlePop);
@@ -230,9 +260,9 @@ export function App() {
     }
   }
 
-  async function loadSlots(offerId: number) {
+  async function loadSlots(offerId: number, clearError = true) {
     setIsLoadingSlots(true);
-    setError(null);
+    if (clearError) setError(null);
     try {
       const loadedSlots = await listOpenSlots(offerId);
       setSlots(loadedSlots);
@@ -289,7 +319,18 @@ export function App() {
         await loadSlots(selectedOfferId);
       }
     } catch (caught) {
-      setError(toApiError(caught));
+      if (caught instanceof ApiRequestError && caught.status === 401) setCustomerToken(null);
+      let refreshed = false;
+      if (isUncertainWriteError(caught)) {
+        try {
+          const reservations = await listCustomerReservations(payload.customerEmail, accessToken);
+          setLastReservation(reservations[0] ?? null);
+          refreshed = true;
+        } catch { /* Keep the original write error. */ }
+      }
+      if (selectedOfferId !== null) await loadSlots(selectedOfferId, false);
+      const failure = toApiError(caught);
+      setError(refreshed ? { ...failure, message: `${failure.message} Latest reservation status was refreshed; check it before retrying.` } : failure);
     } finally {
       setIsSubmittingReservation(false);
     }
@@ -319,13 +360,24 @@ export function App() {
         await loadSlots(selectedOfferId);
       }
     } catch (caught) {
-      setError(toApiError(caught));
+      if (caught instanceof ApiRequestError && caught.status === 401) setCustomerToken(null);
+      let refreshed = false;
+      try {
+        const reservations = await listCustomerReservations(lastReservation.customerEmail, accessToken);
+        setLastReservation(reservations[0] ?? null);
+        refreshed = true;
+      } catch { /* Keep the original write error. */ }
+      if (selectedOfferId !== null) await loadSlots(selectedOfferId, false);
+      const failure = toApiError(caught);
+      setError(refreshed && isUncertainWriteError(caught)
+        ? { ...failure, message: `${failure.message} Latest reservation status was refreshed; check it before retrying.` }
+        : failure);
     } finally {
       setIsSubmittingReservation(false);
     }
   }
 
-  async function loadAdminData(token = adminToken) {
+  async function loadAdminData(token = adminToken): Promise<boolean> {
     const accessToken = requireAccessToken(token);
     if (!accessToken) {
       setError({
@@ -333,7 +385,7 @@ export function App() {
         message: 'Admin login is required',
         details: [],
       });
-      return;
+      return false;
     }
 
     setIsLoadingAdmin(true);
@@ -350,8 +402,11 @@ export function App() {
         ...current,
         offerId: current.offerId || String(allOffers[0]?.id ?? ''),
       }));
+      return true;
     } catch (caught) {
+      if (caught instanceof ApiRequestError && (caught.status === 401 || caught.status === 403)) setAdminToken(null);
       setError(toApiError(caught));
+      return false;
     } finally {
       setIsLoadingAdmin(false);
     }
@@ -526,6 +581,7 @@ export function App() {
       await registerCustomer(customerAuthForm);
       const token = await login({ email: customerAuthForm.email, password: customerAuthForm.password });
       setCustomerToken(token.token);
+      setCustomerAuthForm((current) => ({ ...current, password: '' }));
       setReservationForm((current) => ({
         ...current,
         customerName: current.customerName || customerAuthForm.displayName,
@@ -547,6 +603,7 @@ export function App() {
     try {
       const token = await login(customerLoginForm);
       setCustomerToken(token.token);
+      setCustomerLoginForm((current) => ({ ...current, password: '' }));
       setReservationForm((current) => ({
         ...current,
         customerEmail: current.customerEmail || customerLoginForm.email,
@@ -565,8 +622,9 @@ export function App() {
     setError(null);
     try {
       const token = await login(adminLoginForm);
+      if (!await loadAdminData(token.token)) return;
       setAdminToken(token.token);
-      await loadAdminData(token.token);
+      setAdminLoginForm((current) => ({ ...current, password: '' }));
       navigate('admin');
     } catch (caught) {
       setError(toApiError(caught));
@@ -582,6 +640,7 @@ export function App() {
 
   function handleAdminLogout() {
     setAdminToken(null);
+    setAdminLoginForm((current) => ({ ...current, password: '' }));
     setAdminReservations([]);
     setAdminOffers([]);
     setAdminSlots([]);
@@ -600,7 +659,7 @@ export function App() {
           </span>
           <div>
             <span className="logo-title">Reservation System</span>
-            <span className="logo-subtitle">Spring Boot + React portfolio MVP</span>
+            <span className="logo-subtitle">Find a time that works for you</span>
           </div>
         </div>
         <div className="nav-actions">
@@ -628,9 +687,9 @@ export function App() {
               <div>
                 <p className="eyebrow">Account access</p>
                 <h1>Customer login</h1>
-                <p className="helper">JWT authentication protects reservation and admin workflows.</p>
+                <p className="helper">Sign in to book and manage your reservations.</p>
               </div>
-              <span className="tag">Auth module: {apiConfig.authBaseUrl}</span>
+              <span className="tag">Customer account</span>
             </div>
 
             <div className="auth-tabs">
@@ -753,11 +812,17 @@ export function App() {
                   Admin access
                 </h2>
                 {adminToken ? (
-                  <span className="tag success">Admin token active</span>
+                  <span className="tag success">Administrator signed in</span>
                 ) : (
                   <span className="tag warning">Admin login required</span>
                 )}
               </div>
+              {adminToken ? (
+                <button className="secondary-button" type="button" onClick={handleAdminLogout}>
+                  <LogOut size={16} aria-hidden="true" />
+                  Logout
+                </button>
+              ) : (
               <form className="auth-form" onSubmit={submitAdminLogin}>
                 <label>
                   Admin email
@@ -782,12 +847,9 @@ export function App() {
                     <ShieldCheck size={16} aria-hidden="true" />
                     Login
                   </button>
-                  <button className="secondary-button" type="button" onClick={handleAdminLogout}>
-                    <LogOut size={16} aria-hidden="true" />
-                    Logout
-                  </button>
                 </div>
               </form>
+              )}
             </div>
 
             {!adminToken ? (
@@ -1024,9 +1086,9 @@ export function App() {
           <section className="hero">
             <div className="hero-copy">
               <p className="eyebrow">Booking flow</p>
-              <h1>Reserve a curated service in one controlled workflow.</h1>
+              <h1>Find your next experience.</h1>
               <p className="helper">
-                Browse offers, choose an available slot and create a reservation protected by JWT authentication.
+                Explore an offer, choose a time, and reserve your seats.
               </p>
               <div className="hero-actions">
                 <button className="primary-button" type="button" onClick={() => navigate('auth')}>
@@ -1050,7 +1112,7 @@ export function App() {
               </div>
               <div className="hero-badge">
                 <ShieldCheck size={16} aria-hidden="true" />
-                <span>Admin panel: /admin</span>
+                <span>Secure account access</span>
               </div>
               {customerToken ? (
                 <button className="secondary-button" type="button" onClick={handleLogout}>
@@ -1252,6 +1314,21 @@ function Metric(props: { label: string; value: number }) {
       <span>{props.label}</span>
     </div>
   );
+}
+
+function tokenEmail(token: string): string | null {
+  try {
+    const encodedPayload = token.split('.')[1];
+    if (!encodedPayload) return null;
+    const payload = JSON.parse(atob(encodedPayload.replace(/-/g, '+').replace(/_/g, '/'))) as { email?: unknown };
+    return typeof payload.email === 'string' ? payload.email : null;
+  } catch {
+    return null;
+  }
+}
+
+function isUncertainWriteError(caught: unknown): boolean {
+  return caught instanceof ApiRequestError && (caught.status === 0 || caught.status >= 500);
 }
 
 function EmptyState(props: { label: string }) {

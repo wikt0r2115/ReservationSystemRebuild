@@ -35,8 +35,8 @@ class AvailabilityServiceTest {
 
     private static final Long OFFER_ID = 1L;
     private static final Long SLOT_ID = 10L;
-    private static final LocalDateTime STARTS_AT = LocalDateTime.of(2026, 6, 2, 10, 0);
-    private static final LocalDateTime ENDS_AT = LocalDateTime.of(2026, 6, 2, 12, 0);
+    private static final LocalDateTime STARTS_AT = LocalDateTime.of(2099, 6, 2, 10, 0);
+    private static final LocalDateTime ENDS_AT = LocalDateTime.of(2099, 6, 2, 12, 0);
     private static final int CAPACITY = 10;
 
     @Mock
@@ -141,7 +141,7 @@ class AvailabilityServiceTest {
     @Test
     void updateSlotById_updatesStartTimeOnly() {
         AvailabilitySlot slot = sampleSlot();
-        LocalDateTime newStartsAt = LocalDateTime.of(2026, 6, 2, 11, 0);
+        LocalDateTime newStartsAt = LocalDateTime.of(2099, 6, 2, 11, 0);
         when(slotRepository.findById(SLOT_ID)).thenReturn(Optional.of(slot));
         when(slotRepository.saveAndFlush(slot)).thenReturn(slot);
 
@@ -156,7 +156,7 @@ class AvailabilityServiceTest {
     @Test
     void updateSlotById_updatesEndTimeOnly() {
         AvailabilitySlot slot = sampleSlot();
-        LocalDateTime newEndsAt = LocalDateTime.of(2026, 6, 2, 13, 0);
+        LocalDateTime newEndsAt = LocalDateTime.of(2099, 6, 2, 13, 0);
         when(slotRepository.findById(SLOT_ID)).thenReturn(Optional.of(slot));
         when(slotRepository.saveAndFlush(slot)).thenReturn(slot);
 
@@ -171,8 +171,8 @@ class AvailabilityServiceTest {
     @Test
     void updateSlotById_updatesStartAndEndTime() {
         AvailabilitySlot slot = sampleSlot();
-        LocalDateTime newStartsAt = LocalDateTime.of(2026, 6, 3, 10, 0);
-        LocalDateTime newEndsAt = LocalDateTime.of(2026, 6, 3, 12, 0);
+        LocalDateTime newStartsAt = LocalDateTime.of(2099, 6, 3, 10, 0);
+        LocalDateTime newEndsAt = LocalDateTime.of(2099, 6, 3, 12, 0);
         when(slotRepository.findById(SLOT_ID)).thenReturn(Optional.of(slot));
         when(slotRepository.saveAndFlush(slot)).thenReturn(slot);
 
@@ -187,8 +187,8 @@ class AvailabilityServiceTest {
     @Test
     void updateSlotById_whenDuplicateExists_throwsDuplicateAvailabilitySlotException() {
         AvailabilitySlot slot = sampleSlot();
-        LocalDateTime newStartsAt = LocalDateTime.of(2026, 6, 3, 10, 0);
-        LocalDateTime newEndsAt = LocalDateTime.of(2026, 6, 3, 12, 0);
+        LocalDateTime newStartsAt = LocalDateTime.of(2099, 6, 3, 10, 0);
+        LocalDateTime newEndsAt = LocalDateTime.of(2099, 6, 3, 12, 0);
         when(slotRepository.findById(SLOT_ID)).thenReturn(Optional.of(slot));
         when(slotRepository.existsByOfferIdAndStartsAtAndEndsAtAndIdNot(OFFER_ID, newStartsAt, newEndsAt, SLOT_ID))
                 .thenReturn(true);

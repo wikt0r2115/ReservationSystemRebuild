@@ -11,6 +11,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -27,6 +28,9 @@ public class AvailabilitySlot {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Version
+    private long version;
 
     @NotNull
     private Long offerId;
@@ -96,7 +100,7 @@ public class AvailabilitySlot {
         ensureOpen();
         validatePartySize(partySize);
         if (partySize > this.capacity - this.reservedCount)
-            throw new IllegalArgumentException("Reservation would exceed capacity of " + this.capacity);
+            throw new AvailabilityCapacityExceededException(this.capacity);
         reservedCount += partySize;
     }
 

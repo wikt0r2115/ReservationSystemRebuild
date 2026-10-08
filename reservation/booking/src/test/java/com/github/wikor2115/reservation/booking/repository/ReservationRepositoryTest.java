@@ -74,7 +74,7 @@ class ReservationRepositoryTest {
     }
 
     @Test
-    void findByCustomerEmailIgnoreCaseOrderByCreatedAtDesc_returnsMatchingReservationsSortedDescending() {
+    void findByCustomerEmailOrderByCreatedAtDesc_returnsMatchingReservationsSortedDescending() {
         Reservation earlier = sampleReservation(AVAILABILITY_SLOT_ID, CUSTOMER_EMAIL, "2026-06-01T10:00:00Z");
         Reservation later = sampleReservation(OTHER_AVAILABILITY_SLOT_ID, CUSTOMER_EMAIL, "2026-06-01T11:00:00Z");
         Reservation otherCustomer = sampleReservation(AVAILABILITY_SLOT_ID, OTHER_CUSTOMER_EMAIL,
@@ -82,8 +82,8 @@ class ReservationRepositoryTest {
 
         reservationRepository.saveAll(List.of(earlier, later, otherCustomer));
 
-        List<Reservation> result = reservationRepository.findByCustomerEmailIgnoreCaseOrderByCreatedAtDesc(
-                "JAN@EXAMPLE.COM");
+        List<Reservation> result = reservationRepository.findByCustomerEmailOrderByCreatedAtDesc(
+                CUSTOMER_EMAIL);
 
         assertEquals(2, result.size());
         assertEquals(later.getCreatedAt(), result.get(0).getCreatedAt());

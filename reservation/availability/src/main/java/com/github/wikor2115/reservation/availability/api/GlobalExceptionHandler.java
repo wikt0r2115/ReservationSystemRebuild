@@ -6,15 +6,28 @@ import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import jakarta.persistence.OptimisticLockException;
 
 import com.github.wikor2115.reservation.availability.service.AvailabilitySlotNotFoundException;
 import com.github.wikor2115.reservation.availability.service.DuplicateAvailabilitySlotException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler({ OptimisticLockingFailureException.class, OptimisticLockException.class })
+    public ResponseEntity<ApiErrorResponse> handleConcurrentChange(RuntimeException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        "CONCURRENT_CHANGE",
+                        "Availability changed. Refresh and try again.",
+                        List.of()
+                ));
+    }
 
     @ExceptionHandler(AvailabilitySlotNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleAvailabilitySlotNotFound(

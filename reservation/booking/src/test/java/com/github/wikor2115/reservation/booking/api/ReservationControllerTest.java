@@ -16,6 +16,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -24,6 +25,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.github.wikor2115.reservation.availability.service.AvailabilitySlotNotFoundException;
+import com.github.wikor2115.reservation.availability.domain.AvailabilityCapacityExceededException;
 import com.github.wikor2115.reservation.booking.domain.Reservation;
 import com.github.wikor2115.reservation.booking.domain.ReservationStatus;
 import com.github.wikor2115.reservation.booking.service.ReservationNotFoundException;
@@ -139,8 +141,8 @@ class ReservationControllerTest {
     }
 
     @Test
-    void createReservation_whenCapacityExceeded_returnsBusinessRuleViolation() throws Exception {
-        reservationService.createException = new IllegalArgumentException("Reservation would exceed capacity of 2");
+    void createReservation_whenCapacityExceeded_returnsConflict() throws Exception {
+        reservationService.createException = new AvailabilityCapacityExceededException(2);
 
         mockMvc.perform(post("/api/v1/reservations")
                 .with(customerAuth(CUSTOMER_EMAIL))
@@ -153,9 +155,29 @@ class ReservationControllerTest {
                           "partySize": 3
                         }
                         """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("BUSINESS_RULE_VIOLATION"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CAPACITY_EXCEEDED"))
                 .andExpect(jsonPath("$.message").value("Reservation would exceed capacity of 2"));
+    }
+
+    @Test
+    void createReservation_whenSlotChangesConcurrently_returnsConflict() throws Exception {
+        reservationService.createException = new ObjectOptimisticLockingFailureException(
+                "AvailabilitySlot", AVAILABILITY_SLOT_ID);
+
+        mockMvc.perform(post("/api/v1/reservations")
+                .with(customerAuth(CUSTOMER_EMAIL))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "availabilitySlotId": 10,
+                          "customerName": "Jan Kowalski",
+                          "customerEmail": "jan@example.com",
+                          "partySize": 1
+                        }
+                        """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONCURRENT_CHANGE"));
     }
 
     @Test
