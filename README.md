@@ -6,7 +6,7 @@ A full-stack reservation portfolio project: customers browse offers, register, r
 
 ## Run locally with Docker
 
-Install Docker with Docker Compose, then clone the repository. Use a terminal with Bash (on Windows, for example WSL with Docker access). You do not need to install Java, Node.js, or PostgreSQL on your computer.
+Install Docker with Docker Compose, then clone the repository. Use a terminal with Bash (on Windows, for example WSL with Docker access). You do not need to install Java, Node.js, or PostgreSQL on your computer. The [v1.0.0 release](https://github.com/wikt0r2115/ReservationSystemRebuild/releases/tag/v1.0.0) provides a fixed source snapshot; cloning the default branch gets the latest version.
 
 ```bash
 git clone https://github.com/wikt0r2115/ReservationSystemRebuild.git

@@ -1,0 +1,29 @@
+name: Publish v1 release
+
+on:
+  push:
+    tags:
+      - v1.0.0
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v5
+
+      - name: Verify tag points to current main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: test "$GITHUB_SHA" = "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file docs/release-notes-v1.md --verify-tag
