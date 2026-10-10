@@ -17,8 +17,8 @@ Reservation System Rebuild provides a complete customer booking and administrato
 - [x] Full local Java suite: 249 tests, 0 failures, 0 skipped.
 - [x] Clean Compose start and real API browser flow: 12 tests passed on desktop/mobile emulation.
 - [x] Load run: 5,400 measured HTTP requests, 0 errors; 1,800 reservations and 150 slots reconciled.
-- [x] [GitHub Actions run](https://github.com/wikt0r2115/ReservationSystemRebuild/actions/runs/37804463834) for the candidate branch is green (Java, frontend, package, PostgreSQL smoke, browser E2E).
-- [ ] Public HTTPS demo URL and cellular phone check are recorded.
+- [x] [GitHub Actions run](https://github.com/wikt0r2115/ReservationSystemRebuild/actions/runs/37805217249) for the candidate branch is green (Java, frontend, package, PostgreSQL smoke, browser E2E).
+- [x] README gives a Docker-only local run path, sample credentials location, full reviewer flow, persistence, and reset.
 - [ ] Release tag `v1.0.0` points to that checked commit.
 
-The release should be published only after the remaining checks are complete.
+Reviewers run the app on `localhost` with Docker Compose. No hosted demo is planned for v1.0.0.

@@ -13,7 +13,7 @@ Reservation System Rebuild is a full-stack booking application with a customer f
 
 ## Tradeoffs and limits
 
-Booking imports the availability JPA module so both use one database transaction. This keeps seat accounting simple for the portfolio MVP; extracting independent services would require a different transaction boundary and recovery design. The customer UI currently shows the most recent booking rather than a paginated history. The load results come from one laptop with loopback traffic and should not be treated as hosted capacity. The public HTTPS demo and release link are pending deployment.
+Booking imports the availability JPA module so both use one database transaction. This keeps seat accounting simple for the portfolio MVP; extracting independent services would require a different transaction boundary and recovery design. The customer UI currently shows the most recent booking rather than a paginated history. The load results come from one laptop with loopback traffic and should not be treated as hosted capacity. Reviewers clone the repository and run the complete app locally with Docker Compose; no public hosting is part of this release.
 
 ## Short CV text
 
